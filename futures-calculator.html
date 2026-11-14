@@ -113,6 +113,7 @@
   .sub { font-size:.82rem; color:var(--muted); margin-top:4px; font-variant-numeric:tabular-nums; }
   .pos { color:var(--green); }
   .neg { color:var(--red); }
+  .amber { color:var(--amber-text); }
   .tp { display:grid; grid-template-columns:1fr auto; gap:2px 12px; padding:10px 0; border-top:1px solid var(--line); }
   .tp:first-child { border-top:0; padding-top:4px; }
   .rr { text-align:right; }
@@ -187,15 +188,26 @@
     <form id="form" autocomplete="off" novalidate>
       <section class="card">
         <h2>Account</h2>
-        <div class="row cols-acct">
+        <div class="row cols-2">
           <label class="field"><span>Balance (USDT)</span>
             <input id="balance" type="text" inputmode="decimal" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="next" placeholder="e.g. 1000"></label>
+          <label class="field"><span>Available (USDT)</span>
+            <input id="available" type="text" inputmode="decimal" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="next" placeholder="optional"></label>
+        </div>
+        <div class="row cols-2">
           <label class="field"><span>Risk (%)</span>
             <input id="riskPct" type="text" inputmode="decimal" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="next" placeholder="e.g. 1"></label>
           <label class="field"><span>Leverage (x)</span>
             <input id="leverage" type="text" inputmode="decimal" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="next" placeholder="e.g. 5"></label>
         </div>
+        <div class="row">
+          <label class="field"><span>Risk already open (USDT)</span>
+            <input id="openRisk" type="text" inputmode="decimal" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="next" placeholder="optional"></label>
+        </div>
         <p class="hint" id="riskHint"></p>
+        <p class="hint">Already in a trade? <b>Available</b> = the money not yet used as margin; this trade's margin is
+          checked against it. <b>Risk already open</b> = what you would lose if the stops of your open trades are hit.
+          Leave both empty if you have no open trades.</p>
       </section>
 
       <section class="card" aria-labelledby="live-h">
@@ -282,8 +294,15 @@
           <label class="field"><span>SOL</span>
             <input id="minStopSOL" type="text" inputmode="decimal" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="done" placeholder="0.60"></label>
         </div>
+        <div class="lbl">Maximum total open risk (% of balance)</div>
+        <div class="row cols-3">
+          <label class="field"><span>All trades</span>
+            <input id="maxOpenRiskPct" type="text" inputmode="decimal" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="done" placeholder="5"></label>
+        </div>
+        <p class="hint">Used when "Risk already open" is filled in: a caution when all your trades together would lose more
+          than this if every stop is hit. Set 0 to turn it off.</p>
         <p class="hint">Always on: a caution when fees are more than 10% of the loss at the stop, and when the margin is
-          more than 50% of your balance.</p>
+          more than 50% of your balance (of Available, when you fill it in).</p>
       </details>
     </form>
 
@@ -297,6 +316,8 @@
         <div class="tile"><div class="lbl">Margin required</div><div class="big" id="o-margin"></div><div class="sub" id="o-margin-sub"></div></div>
         <div class="tile"><div class="lbl">Loss at stop loss</div><div class="big neg" id="o-loss"></div><div class="sub" id="o-loss-sub"></div></div>
         <div class="tile"><div class="lbl">Breakeven price</div><div class="big" id="o-be"></div><div class="sub">Closing here = 0 after fees</div></div>
+        <div class="tile wide" id="o-openrisk-tile" hidden><div class="lbl">Total open risk — all your trades, if every stop is hit</div>
+          <div class="big" id="o-openrisk"></div><div class="sub" id="o-openrisk-sub"></div></div>
         <div class="tile wide"><div class="lbl">Take profit — if the whole position closes there</div><div id="o-tps"></div></div>
         <div class="tile wide"><div class="lbl">Liquidation price <em>approximate</em></div><div class="big" id="o-liq"></div><div class="sub" id="o-liq-sub"></div></div>
       </div>
@@ -315,7 +336,9 @@
         <li><b>Coins</b> = risk in USDT ÷ loss per coin. <b>Position size (USDT)</b> = coins × entry price.<br>
             <span class="eg">Because fees are inside step 2, the loss at the stop, fees included, is exactly your risk.</span></li>
         <li><b>Margin</b> = position size ÷ leverage. Leverage does <i>not</i> change how many USDT you win or lose —
-            it only changes how much money is locked as margin, and how close liquidation is.</li>
+            it only changes how much money is locked as margin, and how close liquidation is.<br>
+            <span class="eg">Already in a trade? The margin (+ opening fee) must fit in <b>Available</b> if you fill it in,
+            otherwise in your Balance. Your risk is always a % of the whole Balance.</span></li>
         <li><b>Profit at a take profit</b> = coins × distance from entry to TP − entry fee − exit fee.
             Each TP is shown as if the whole position closes there.</li>
         <li><b>Reward-to-risk</b> = profit at TP ÷ loss at stop (after fees).
@@ -345,7 +368,8 @@
             <b>tight stop</b> = stop distance ÷ entry is below the minimum for the coin picked under Live price
             (BTC 0.30%, ETH 0.40%, SOL 0.60% unless you change them in Caution settings);
             <b>high fees</b> = fees at the stop ÷ total loss at the stop is above 10%;
-            <b>high margin</b> = margin ÷ balance is above 50%.</li>
+            <b>high margin</b> = margin ÷ balance (or ÷ Available) is above 50%;
+            <b>total open risk</b> = risk already open + this trade's loss at the stop, as % of the balance, above 5%.</li>
       </ol>
     </details>
     <p>Live prices come from MEXC's public futures feed (no account, no API key). Only the coin name is sent to MEXC —
@@ -369,7 +393,8 @@ const FuturesMath = (() => {
   // Cautions — amber advice, not errors:
   const MIN_STOP_PCT = { BTC_USDT: 0.30, ETH_USDT: 0.40, SOL_USDT: 0.60 }; // default minimum stop distance per coin
   const FEE_SHARE_LIMIT_PCT = 10;     // fees more than this share of the loss at the stop
-  const MARGIN_SHARE_LIMIT_PCT = 50;  // margin more than this share of the balance
+  const MARGIN_SHARE_LIMIT_PCT = 50;  // margin more than this share of the balance (or of Available)
+  const MAX_OPEN_RISK_PCT = 5;        // all open trades together losing more than this % of the balance
 
   // +1 for LONG, -1 for SHORT. Multiplying a price move by this turns it into
   // "good for me" (positive) or "bad for me" (negative).
@@ -492,11 +517,13 @@ const FuturesMath = (() => {
     const liquidation = liquidationPrice(t.side, t.entry, t.leverage, t.mmr);
     const liqBeforeStop = d === 1 ? liquidation >= t.stop : liquidation <= t.stop;
 
-    // Does margin + opening fee fit in the balance? If not, find the smallest whole leverage that does.
-    const notEnoughBalance = t.balance != null && margin + openFee > t.balance;
+    // Does margin + opening fee fit? Checked against Available when you gave it (already in a trade),
+    // otherwise against the Balance. If not, find the smallest whole leverage that does fit.
+    const funds = t.available != null ? t.available : t.balance;
+    const notEnoughBalance = funds != null && margin + openFee > funds;
     let minLeverage = null;
     if (notEnoughBalance) {
-      const room = t.balance - openFee;
+      const room = funds - openFee;
       minLeverage = room > 0 ? Math.ceil(positionUsdt / room - 1e-9) : Infinity;
     }
 
@@ -506,15 +533,19 @@ const FuturesMath = (() => {
       takeProfits, breakeven: breakevenPrice(t.side, t.entry, t.fee),
       liquidation, liqBeforeStop, notEnoughBalance, minLeverage,
       feeSharePct: loss.fees / loss.total * 100,                               // fees as % of the loss at the stop
-      marginSharePct: t.balance != null ? margin / t.balance * 100 : null,     // margin as % of the balance
+      marginSharePct: funds != null ? margin / funds * 100 : null,             // margin as % of available (or balance)
+      marginBase: t.available != null ? 'available' : 'balance',
     };
   }
 
-  const WARNING_ORDER = ['STOP_WRONG_SIDE', 'LIQ_BEFORE_STOP', 'NOT_ENOUGH_BALANCE', 'TP_WRONG_SIDE', 'LOW_RR', 'HIGH_RISK'];
+  const WARNING_ORDER = ['STOP_WRONG_SIDE', 'LIQ_BEFORE_STOP', 'AVAILABLE_ABOVE_BALANCE', 'NOT_ENOUGH_BALANCE',
+                         'TP_WRONG_SIDE', 'LOW_RR', 'HIGH_RISK'];
 
   // The full calculator. Percent inputs are in percent (feePct 0.02 means 0.02%).
   // inp = { side, balance, riskPct, entry, stop, tps:[tp1,tp2,tp3], leverage, feePct, mmrPct,
-  //         coin ('BTC_USDT' …, optional), minStopPct (optional; default per coin) }
+  //         coin ('BTC_USDT' …, optional), minStopPct (optional; default per coin),
+  //         available (optional: free money for margin), openRisk (optional: USDT already at risk in open trades),
+  //         maxOpenRiskPct (optional; default 5) }
   // Empty boxes are null, unreadable ones NaN.
   // Returns red `warnings` (real problems) and amber `cautions` (advice) separately.
   function calculate(inp) {
@@ -536,8 +567,21 @@ const FuturesMath = (() => {
       return v;
     });
 
+    // Optional boxes for when you are already in a trade: empty = not used; filled = must be 0 or more.
+    const opt = {};
+    for (const key of ['available', 'openRisk']) {
+      const v = inp[key];
+      opt[key] = null;
+      if (v == null) continue;
+      if (!Number.isFinite(v) || v < 0) invalid.push(key);
+      else opt[key] = v;
+    }
+
     // Warnings we can give even before everything is filled in
     if (good.riskPct && inp.riskPct > RISK_LIMIT_PCT) warnings.push({ code: 'HIGH_RISK', riskPct: inp.riskPct });
+    if (good.balance && opt.available != null && opt.available > inp.balance) {
+      warnings.push({ code: 'AVAILABLE_ABOVE_BALANCE', available: opt.available, balance: inp.balance });
+    }
     const stopWrong = good.entry && good.stop && !stopIsOnRightSide(inp.side, inp.entry, inp.stop);
     if (stopWrong) warnings.push({ code: 'STOP_WRONG_SIDE', side: inp.side, entry: inp.entry, stop: inp.stop });
 
@@ -549,10 +593,13 @@ const FuturesMath = (() => {
     const riskAmount = inp.balance * inp.riskPct / 100;
     const qty = riskAmount / lossPerCoin(inp.side, inp.entry, inp.stop, fee);
     const r = evaluate({ side: inp.side, entry: inp.entry, stop: inp.stop, tps, qty,
-                         leverage: inp.leverage, fee, mmr, balance: inp.balance });
+                         leverage: inp.leverage, fee, mmr, balance: inp.balance, available: opt.available });
 
     if (r.liqBeforeStop) warnings.push({ code: 'LIQ_BEFORE_STOP', liquidation: r.liquidation, stop: inp.stop });
-    if (r.notEnoughBalance) warnings.push({ code: 'NOT_ENOUGH_BALANCE', margin: r.margin, openFee: r.openFee, minLeverage: r.minLeverage });
+    if (r.notEnoughBalance) {
+      warnings.push({ code: 'NOT_ENOUGH_BALANCE', margin: r.margin, openFee: r.openFee, minLeverage: r.minLeverage,
+                      base: r.marginBase, funds: r.marginBase === 'available' ? opt.available : inp.balance });
+    }
     for (const tp of r.takeProfits) {
       if (!tp.rightSide) warnings.push({ code: 'TP_WRONG_SIDE', n: tp.n, price: tp.price });
       else if (tp.rrAfterFees < MIN_RR) warnings.push({ code: 'LOW_RR', n: tp.n, rr: tp.rrAfterFees });
@@ -567,12 +614,24 @@ const FuturesMath = (() => {
     }
     if (r.feeSharePct > FEE_SHARE_LIMIT_PCT) cautions.push({ code: 'HIGH_FEES', feeSharePct: r.feeSharePct });
     if (!r.notEnoughBalance && r.marginSharePct > MARGIN_SHARE_LIMIT_PCT) {  // over 100% is already a red warning
-      cautions.push({ code: 'HIGH_MARGIN', marginSharePct: r.marginSharePct });
+      cautions.push({ code: 'HIGH_MARGIN', marginSharePct: r.marginSharePct, base: r.marginBase });
     }
-    return Object.assign({ status: 'ok', missing, invalid, riskAmount, warnings: sortW(), cautions }, r);
+
+    // Total open risk = risk already open + this trade's loss at the stop (only when you filled in open risk).
+    const openRiskLimitPct = Number.isFinite(inp.maxOpenRiskPct) && inp.maxOpenRiskPct >= 0 ? inp.maxOpenRiskPct : MAX_OPEN_RISK_PCT;
+    let totalOpenRisk = null, totalOpenRiskPct = null;
+    if (opt.openRisk != null) {
+      totalOpenRisk = opt.openRisk + r.loss.total;
+      totalOpenRiskPct = totalOpenRisk / inp.balance * 100;
+      if (openRiskLimitPct > 0 && totalOpenRiskPct > openRiskLimitPct) {    // limit 0 = this caution is off
+        cautions.push({ code: 'OPEN_RISK_HIGH', total: totalOpenRisk, pct: totalOpenRiskPct, limitPct: openRiskLimitPct });
+      }
+    }
+    return Object.assign({ status: 'ok', missing, invalid, riskAmount, warnings: sortW(), cautions,
+                           totalOpenRisk, totalOpenRiskPct, openRiskLimitPct }, r);
   }
 
-  return { RISK_LIMIT_PCT, MIN_RR, MIN_STOP_PCT, FEE_SHARE_LIMIT_PCT, MARGIN_SHARE_LIMIT_PCT, parseNumber, lossPerCoin, closeAt, breakevenPrice,
+  return { RISK_LIMIT_PCT, MIN_RR, MIN_STOP_PCT, FEE_SHARE_LIMIT_PCT, MARGIN_SHARE_LIMIT_PCT, MAX_OPEN_RISK_PCT, parseNumber, lossPerCoin, closeAt, breakevenPrice,
            liquidationPrice, takeProfitForR, stopForR, evaluate, calculate };
 })();
 
@@ -782,6 +841,36 @@ function runSelfTest() {
   is('2x trade that uses 96% of the balance → amber margin caution', cz(calc({ balance: 100, riskPct: 2, stop: 99,
      tps: [103, null, null], leverage: 2, feePct: 0.02 })), 'HIGH_MARGIN');
 
+  section('K. Already in a trade — Available and Risk already open (ETH SHORT 1813 / 1820.16, TP 1796.5, risk 2%)');
+  const inTrade = changes => M.calculate(Object.assign({}, ethTrade, changes));
+  const k1 = inTrade({ available: null });
+  is('Balance 291.03, Available empty, 7x → margin fits, no balance warning', codes(k1), 'none');
+  is('   margin checked against the balance', k1.marginBase, 'balance');
+  const k2 = inTrade({ available: 150 });
+  is('Balance 291.03, Available 150, 7x → NOT_ENOUGH_BALANCE', codes(k2), 'NOT_ENOUGH_BALANCE');
+  is('   minimum leverage', k2.minLeverage, 9);
+  near('   risk still 2% of the whole balance (USDT)', k2.riskAmount, 5.8206, 1e-9);
+  is('   warning text names the available balance', warningText(k2.warnings[0], null),
+     'Margin 191.15 USDT (+ 0.27 opening fee) is more than your available balance (150.00 USDT). Use at least 9x leverage.');
+  const k3 = inTrade({ available: 150, leverage: 9 });
+  is('Balance 291.03, Available 150, 9x → fits', codes(k3), 'none');
+  near('   margin as % of available', k3.marginSharePct, 99.1152, 0.001);
+  is('Balance 291.03, Available 400 → red warning: available > balance', codes(inTrade({ available: 400 })), 'AVAILABLE_ABOVE_BALANCE');
+  is('Available that is not a number (-5) → box marked invalid', inTrade({ available: NaN }).invalid.join(','), 'available');
+  const k5 = inTrade({ openRisk: 5.82 });
+  near('Open risk 5.82 → total open risk (USDT)', k5.totalOpenRisk, 11.6406, 1e-9);
+  near('   as % of balance (≈ 4.0%)', k5.totalOpenRiskPct, 3.9998, 0.0001);
+  is('   → no caution', yes(k5, 'OPEN_RISK_HIGH'), 'no');
+  const k6 = inTrade({ openRisk: 10 });
+  near('Open risk 10 → total open risk (USDT)', k6.totalOpenRisk, 15.8206, 1e-9);
+  near('   as % of balance (≈ 5.44%)', k6.totalOpenRiskPct, 5.4361, 0.0001);
+  is('   → caution', yes(k6, 'OPEN_RISK_HIGH'), 'yes');
+  is('   caution text', ctext(k6, 'OPEN_RISK_HIGH'),
+     'All your trades together risk 15.82 USDT (5.44% of your balance) if every stop is hit — more than 5%.');
+  is('Your own limit 6% → no caution', yes(inTrade({ openRisk: 10, maxOpenRiskPct: 6 }), 'OPEN_RISK_HIGH'), 'no');
+  is('Limit 0 turns the open-risk caution off', yes(inTrade({ openRisk: 10, maxOpenRiskPct: 0 }), 'OPEN_RISK_HIGH'), 'no');
+  is('Open risk empty → no total shown', inTrade({}).totalOpenRisk, null);
+
   const passed = rows.filter(r => r.pass === true).length;
   const total = rows.filter(r => !r.header).length;
   return { rows, passed, total };
@@ -836,14 +925,18 @@ const Fmt = {
 const $ = id => document.getElementById(id);
 const h = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 
-const FIELDS = ['balance', 'riskPct', 'leverage', 'entry', 'stop', 'tp1', 'tp2', 'tp3', 'feePct', 'mmrPct'];
-const DEFAULTS = { feePct: '0.02', mmrPct: '0.5', minStopBTC: '0.30', minStopETH: '0.40', minStopSOL: '0.60' };
+const FIELDS = ['balance', 'available', 'riskPct', 'leverage', 'openRisk', 'entry', 'stop', 'tp1', 'tp2', 'tp3', 'feePct', 'mmrPct'];
+const DEFAULTS = { feePct: '0.02', mmrPct: '0.5', minStopBTC: '0.30', minStopETH: '0.40', minStopSOL: '0.60', maxOpenRiskPct: '5' };
 // Caution settings: the box that holds the minimum stop distance for each coin.
 const CAUTION_FIELDS = { BTC_USDT: 'minStopBTC', ETH_USDT: 'minStopETH', SOL_USDT: 'minStopSOL' };
 const minStopOk = v => v >= 0 && v < 100;
-const LABELS = { balance: 'Balance', riskPct: 'Risk %', leverage: 'Leverage', entry: 'Entry price', stop: 'Stop loss',
+// Every box in Caution settings (remembered; red border if unreadable).
+const SETTING_IDS = [...Object.values(CAUTION_FIELDS), 'maxOpenRiskPct'];
+const LABELS = { balance: 'Balance', available: 'Available', riskPct: 'Risk %', leverage: 'Leverage',
+                 openRisk: 'Risk already open', entry: 'Entry price', stop: 'Stop loss',
                  tp1: 'Take profit 1', tp2: 'TP 2', tp3: 'TP 3', feePct: 'Taker fee', mmrPct: 'Maintenance margin' };
-const LIMITS = { balance: 'more than 0', riskPct: 'between 0 and 100', leverage: '1 or more', entry: 'more than 0',
+const LIMITS = { balance: 'more than 0', available: '0 or more', riskPct: 'between 0 and 100', leverage: '1 or more',
+                 openRisk: '0 or more', entry: 'more than 0',
                  stop: 'more than 0', tp1: 'more than 0', tp2: 'more than 0', tp3: 'more than 0',
                  feePct: '0 to 10', mmrPct: '0 to 100' };
 
@@ -855,7 +948,7 @@ function readRaw() {
   raw.calcDir = calcDir();           // remembered: 'tp' (TP from stop) or 'stop' (stop from TP)
   raw.tpMode = tpMode();             // remembered: Manual, 1.5, 2, 3, custom or ladder
   raw.customR = $('customR').value;
-  for (const id of Object.values(CAUTION_FIELDS)) raw[id] = $(id).value;   // caution settings, remembered
+  for (const id of SETTING_IDS) raw[id] = $(id).value;   // caution settings, remembered
   return raw;
 }
 
@@ -863,10 +956,13 @@ function toInputs(raw) {
   const n = k => FuturesMath.parseNumber(raw[k]);
   const coin = CAUTION_FIELDS[raw.symbol] ? raw.symbol : 'BTC_USDT';      // the coin picked under Live price
   const minStop = n(CAUTION_FIELDS[coin]);
+  const maxOpen = n('maxOpenRiskPct');
   return { side: raw.side, balance: n('balance'), riskPct: n('riskPct'), leverage: n('leverage'),
+           available: n('available'), openRisk: n('openRisk'),
            entry: n('entry'), stop: n('stop'), tps: [n('tp1'), n('tp2'), n('tp3')],
            feePct: n('feePct'), mmrPct: n('mmrPct'),
-           coin, minStopPct: minStopOk(minStop) ? minStop : null };       // empty or unreadable → the default
+           coin, minStopPct: minStopOk(minStop) ? minStop : null,          // empty or unreadable → the default
+           maxOpenRiskPct: minStopOk(maxOpen) ? maxOpen : null };
 }
 
 // Show prices with one more decimal than you typed (min 2), and enough digits for tiny coins.
@@ -885,10 +981,16 @@ function warningText(w, P) {
         : `Stop loss is on the wrong side: for a LONG it must be BELOW the entry (${P(w.entry)}).`;
     case 'LIQ_BEFORE_STOP':
       return `Liquidation (≈ ${P(w.liquidation)}) is reached before your stop loss (${P(w.stop)}). You would be liquidated first — lower the leverage or move the stop.`;
-    case 'NOT_ENOUGH_BALANCE':
+    case 'NOT_ENOUGH_BALANCE': {
+      const avail = w.base === 'available';
       return Number.isFinite(w.minLeverage)
-        ? `Margin ${Fmt.usdt(w.margin)} USDT (+ ${Fmt.usdt(w.openFee)} opening fee) is more than your balance. Use at least ${w.minLeverage}x leverage.`
-        : 'Your balance is too small even to pay the opening fee.';
+        ? `Margin ${Fmt.usdt(w.margin)} USDT (+ ${Fmt.usdt(w.openFee)} opening fee) is more than ` +
+          `${avail ? `your available balance (${Fmt.usdt(w.funds)} USDT)` : 'your balance'}. Use at least ${w.minLeverage}x leverage.`
+        : `${avail ? 'Your available balance' : 'Your balance'} is too small even to pay the opening fee.`;
+    }
+    case 'AVAILABLE_ABOVE_BALANCE':
+      return `Available (${Fmt.usdt(w.available)} USDT) is more than your balance (${Fmt.usdt(w.balance)} USDT). Available is ` +
+             'the part of your balance not yet used as margin, so it can\'t be bigger — check both numbers.';
     case 'TP_WRONG_SIDE':
       return `TP ${w.n} (${P(w.price)}) is on the wrong side of the entry — it would close at a loss.`;
     case 'LOW_RR':
@@ -904,7 +1006,11 @@ function warningText(w, P) {
     case 'HIGH_FEES':
       return `Fees are ${w.feeSharePct.toFixed(1)}% of your loss. Tight stops make fees expensive.`;
     case 'HIGH_MARGIN':
-      return `This trade uses ${w.marginSharePct.toFixed(1)}% of your balance as margin, leaving little room for other trades.`;
+      return `This trade uses ${w.marginSharePct.toFixed(1)}% of your ${w.base === 'available' ? 'available balance' : 'balance'} ` +
+             'as margin, leaving little room for other trades.';
+    case 'OPEN_RISK_HIGH':
+      return `All your trades together risk ${Fmt.usdt(w.total)} USDT (${w.pct.toFixed(2)}% of your balance) if every stop ` +
+             `is hit — more than ${Fmt.num(w.limitPct, 2).replace(/\.?0+$/, '')}%.`;
   }
   return w.code;
 }
@@ -959,7 +1065,7 @@ function render(res, inp) {
     ? `If the stop is hit you lose ${Fmt.usdt(inp.balance * inp.riskPct / 100)} USDT, fees included.`
     : 'Risk = how much of your balance you accept to lose if the stop loss is hit.';
 
-  for (const id of Object.values(CAUTION_FIELDS)) {     // caution settings: red border if unreadable
+  for (const id of SETTING_IDS) {                       // caution settings: red border if unreadable
     const v = FuturesMath.parseNumber($(id).value);
     $(id).classList.toggle('bad', v != null && !minStopOk(v));
   }
@@ -988,11 +1094,21 @@ function render(res, inp) {
   setBig('o-margin', Fmt.usdt(res.margin), 'USDT', res.notEnoughBalance ? 'neg' : '');
   const mSub = $('o-margin-sub');
   mSub.className = 'sub' + (res.notEnoughBalance ? ' neg' : '');
+  const avail = res.marginBase === 'available';
   mSub.textContent = !res.notEnoughBalance
-    ? `at ${inp.leverage}x · ${Fmt.num(res.margin / inp.balance * 100, 1)}% of your balance`
+    ? `at ${inp.leverage}x · ${Fmt.num(res.marginSharePct, 1)}% of ${avail ? 'available' : 'your balance'}`
     : Number.isFinite(res.minLeverage)
-      ? `More than your balance. Minimum leverage: ${res.minLeverage}x`
-      : 'Your balance is too small for this trade.';
+      ? `More than ${avail ? 'available' : 'your balance'}. Minimum leverage: ${res.minLeverage}x`
+      : `${avail ? 'Available' : 'Your balance'} is too small for this trade.`;
+
+  const orTile = $('o-openrisk-tile');                  // only when "Risk already open" is filled in
+  orTile.hidden = res.totalOpenRisk == null;
+  if (res.totalOpenRisk != null) {
+    const high = res.cautions.some(c => c.code === 'OPEN_RISK_HIGH');
+    setBig('o-openrisk', Fmt.usdt(res.totalOpenRisk), 'USDT', high ? 'amber' : '');
+    $('o-openrisk-sub').textContent = `${Fmt.num(res.totalOpenRiskPct, 2)}% of your balance · ` +
+      `${Fmt.usdt(inp.openRisk)} already open + ${Fmt.usdt(res.loss.total)} this trade`;
+  }
 
   setBig('o-loss', '−' + Fmt.usdt(res.loss.total), 'USDT', 'neg');
   $('o-loss-sub').textContent =
@@ -1044,7 +1160,7 @@ function loadInputs() {
 }
 function fillForm(saved) {
   for (const k of FIELDS) if (typeof saved[k] === 'string') $(k).value = saved[k];
-  for (const id of Object.values(CAUTION_FIELDS)) if (typeof saved[id] === 'string') $(id).value = saved[id];
+  for (const id of SETTING_IDS) if (typeof saved[id] === 'string') $(id).value = saved[id];
   $(saved.side === 'short' ? 'side-short' : 'side-long').checked = true;
   const sym = typeof saved.symbol === 'string' && $('sym-' + saved.symbol);
   if (sym) sym.checked = true;

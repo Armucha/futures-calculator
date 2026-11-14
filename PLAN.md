@@ -199,6 +199,20 @@ Log:
   warning). Clicked through in Firefox: ETH → 2 cautions, BTC → 1, BTC min 0.5% → 2 naming BTC, "abc" → red box +
   default, red + amber together, settings remembered and collapsed after reload.
 
+## Feature 7 — Already in a trade (Available, Risk already open)
+- Optional **Available (USDT)** next to Balance. Balance still sets the risk amount; Available (when filled) is used
+  for the margin check and minimum leverage, and the margin tile says "X% of available". Red warning if
+  Available > Balance. The amber high-margin caution also uses Available when filled (it is about free money left).
+- Optional **Risk already open (USDT)**: total open risk = that + this trade's loss at the stop, in USDT and % of
+  Balance, in its own tile (only when filled). Amber caution above 5% of Balance (editable in Caution settings,
+  remembered, 0 = off).
+- Both boxes remembered; Clear trade leaves them. Filled boxes must be 0 or more, otherwise marked invalid.
+
+Log:
+- 2026-11-14 — Self-test 139/139 (your 6 cases + exact texts, risk still from Balance, 99.1% of available, limit
+  6% / 0 = off, unreadable Available). Clicked through in Firefox: all 6 cases, 3% limit, Clear trade keeps both
+  boxes, everything survives a reload.
+
 ## Ideas for later (not built)
 - Split the position across TP1/TP2/TP3 (e.g. 50/30/20%) and show the blended result
 - Round the coin amount to the exchange's step size

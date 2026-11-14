@@ -24,6 +24,13 @@ local files. The calculator still works; it just starts empty each time.
 ## How to use it
 
 1. **Account:** your balance (USDT), how much of it you are willing to lose on this trade (%), and leverage.
+   **Already in a trade?** Two optional boxes:
+   - **Available (USDT):** the money not yet used as margin. This trade's margin (and minimum leverage) is
+     checked against it. Your risk is still a % of the whole Balance. Empty = use Balance as before.
+   - **Risk already open (USDT):** what you'd lose if the stops of your open trades are hit. The results then
+     show **total open risk** = that + this trade's loss at the stop, in USDT and as % of Balance.
+
+   Both are remembered, and **Clear trade** leaves them alone.
 2. **Trade:** LONG or SHORT, entry, stop loss, take profit (TP 2 and TP 3 are optional).
    Or let the calculator set the take profit for you: tap **1.5R**, **2R**, **3R**, **Custom**
    (type any ratio, e.g. 2.5) or **Ladder 1R / 2R / 3R** (fills TP 1, 2 and 3). The take profit is placed
@@ -70,8 +77,8 @@ Sources: MEXC futures WebSocket docs for the
 
 ## Red warnings and amber cautions
 
-**Red** = a real problem: stop on the wrong side, liquidation before the stop, margin bigger than your balance,
-TP on the wrong side, reward-to-risk below 1.5, risk above 2%.
+**Red** = a real problem: stop on the wrong side, liquidation before the stop, margin bigger than your balance
+(or than Available), Available bigger than Balance, TP on the wrong side, reward-to-risk below 1.5, risk above 2%.
 
 **Amber** = advice, not an error:
 
@@ -79,11 +86,13 @@ TP on the wrong side, reward-to-risk below 1.5, risk above 2%.
 |---|---|---|
 | Tight stop | stop closer to entry than the minimum for the coin picked under Live price: BTC 0.30%, ETH 0.40%, SOL 0.60% | "Stop is only X% away. ETH often moves that much in minutes, so normal noise could hit it." |
 | High fees | fees are more than 10% of the loss at the stop | "Fees are X% of your loss. Tight stops make fees expensive." |
-| High margin | margin is more than 50% of your balance | "This trade uses X% of your balance as margin, leaving little room for other trades." |
+| High margin | margin is more than 50% of your balance (of Available, when filled in) | "This trade uses X% of your balance as margin, leaving little room for other trades." ("…of your available balance…" when Available is used) |
+| High total open risk | risk already open + this trade's loss at the stop is more than 5% of your balance (only when "Risk already open" is filled in) | "All your trades together risk X USDT (Y% of your balance) if every stop is hit — more than 5%." |
 
 Change the minimum stop distances under **Caution settings** (collapsed at the bottom of the inputs); they are
 remembered. Set one to 0 to turn the tight-stop caution off for that coin. When the margin is more than your whole
-balance, you get the red warning instead of the amber one.
+balance, you get the red warning instead of the amber one. The 5% open-risk limit is in Caution settings too
+(remembered, 0 = off).
 
 ## The formulas, in simple words
 
@@ -130,10 +139,10 @@ To make the calculator size exactly this trade, enter **balance 1321.11** and **
 | Position (balance 1321.11, risk 1%) | ≈ 1772 | **1,771.99 USDT** | ✅ |
 | Loss at stop incl. fees = chosen risk | exactly | difference **0.000000000** | ✅ |
 
-The self-test has 119 checks in total: your trade, a LONG trade, every warning,
+The self-test has 139 checks in total: your trade, a LONG trade, every warning,
 number reading (`66783,9`, `66,783.9`, `1,772` = 1772, `0,025` = 0.025, spaces), remembering inputs, reading MEXC messages
 (real samples, plus broken, negative and wrong-coin messages), take profit from a ratio, stop loss from a
-take profit, and the amber cautions. All pass.
+take profit, the amber cautions, and being in a trade already (Available, risk already open). All pass.
 
 Cautions (fee 0.02%, MMR 0.5%, default minimums):
 
@@ -142,6 +151,17 @@ Cautions (fee 0.02%, MMR 0.5%, default minimums):
 | ETH SHORT, balance 291.03, risk 2%, 7x, 1813 / stop 1820.16 | yes (0.39% < 0.40%) | no (9.2%) | yes (65.7%) |
 | BTC LONG, balance 1000, risk 1%, 10x, 1000 / stop 998 | yes (0.20% < 0.30%) | yes (16.7%) | no (41.7%) |
 | BTC LONG, balance 1000, risk 1%, 5x, 1000 / stop 980 | no | no | no |
+
+Already in a trade (ETH SHORT 1813 / stop 1820.16 / TP 1796.5, risk 2%, balance 291.03):
+
+| Case | Result |
+|---|---|
+| Available empty, 7x | margin 191.15 fits, no warning |
+| Available 150, 7x | red: not enough available, minimum leverage **9x** |
+| Available 150, 9x | fits (margin 148.67 = 99.1% of available → amber margin caution) |
+| Available 400 | red: Available is more than Balance |
+| Risk already open 5.82 | total open risk 11.64 USDT = 4.00%, no caution |
+| Risk already open 10 | total open risk 15.82 USDT = 5.44%, amber caution |
 
 Take profit from a ratio (fee 0.02% unless stated). R:R after fees comes out exactly as chosen in every case:
 
