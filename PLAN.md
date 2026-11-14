@@ -136,8 +136,13 @@ Privacy / secrets check before the first upload:
 
 Steps:
 - [x] 9. Account + login (done by you), history cleaned, re-scanned
-- [ ] 10. `index.html` forwarding to the calculator, `.nojekyll`, README phone section; create repo, push, turn on Pages
-- [ ] 11. Check the live site: page loads, self-test passes, live prices work from github.io
+- [x] 10. `index.html` forwarding to the calculator, `.nojekyll`, README phone section; create repo, push, turn on Pages
+- [x] 11. Check the live site: page loads, self-test passes, live prices work from github.io
+
+Log:
+- 2026-11-14 — Public repo https://github.com/Armucha/futures-calculator created and pushed; Pages built in ~30 s.
+  Deployed files byte-identical to local. Short link forwards to the calculator (keeps `#test`); self-test 65/65 on
+  github.io; live MEXC prices connect from the github.io origin.
 
 ## Ideas for later (not built)
 - Split the position across TP1/TP2/TP3 (e.g. 50/30/20%) and show the blended result
