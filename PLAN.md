@@ -57,7 +57,7 @@ maintenance margin rate (default 0.5%).
 - [x] 2. Math engine + self-test (test trade from the brief) — 53/53 checks pass
 - [x] 3. Full user interface: inputs, outputs, red warnings, live updates, dark phone layout
       (warnings moved here from step 4 — their logic was already in the math engine)
-- [ ] 4. Remember last inputs + "Clear trade" button + "How the math works" section in the app
+- [x] 4. Remember last inputs + "Clear trade" button + "How the math works" section in the app
 - [ ] 5. README with formulas in simple words + test results; final check
 
 ## Test trade (from the brief)
@@ -81,3 +81,6 @@ Precomputed in Python (fee 0.02%, MMR 0.5%):
 - 2026-11-14 — Screen built. Phone (360/390 px) and desktop (1280 px) screenshots checked in headless Firefox:
   test trade shows 1,771.99 USDT / −13.21 / +25.40 / 1.92 (2.09 before fees). Sticky summary bar on phones.
   Fixed: hidden result boxes still showed (CSS `display:grid` beat `hidden`).
+- 2026-11-14 — Inputs saved in the browser (localStorage) on every change. Verified across a real reload in
+  headless Firefox (fresh profile → type trade → reopen → trade is back). "Clear trade" empties entry/stop/TPs only.
+  In-app "How the math works". Self-test now 54/54 (adds a storage round-trip; restores your saved inputs after).

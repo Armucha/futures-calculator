@@ -84,6 +84,11 @@
   .summary .wcount { color:var(--red); font-weight:700; margin-left:auto; }
 
   .foot { color:var(--muted); font-size:.85rem; margin-top:24px; border-top:1px solid var(--line); padding-top:12px; }
+  .how { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:12px 14px; color:var(--text); font-size:.92rem; }
+  .how summary { cursor:pointer; font-weight:600; }
+  .how ol { margin:10px 0 2px; padding-left:22px; }
+  .how li { margin-bottom:10px; }
+  .how .eg { color:var(--muted); font-size:.88rem; }
 
   @media (min-width: 860px) {
     .summary { display:none; }
@@ -115,6 +120,7 @@
 
   <header class="top">
     <h1>Futures Calculator</h1>
+    <button type="button" class="btn" id="clearTrade" title="Empty entry, stop and take profits. Keeps balance, risk, leverage and fees.">Clear trade</button>
   </header>
 
   <a id="summary" class="summary" href="#results"></a>
@@ -184,6 +190,31 @@
   </div>
 
   <footer class="foot">
+    <details class="how">
+      <summary>How the math works (simple words)</summary>
+      <ol>
+        <li><b>Risk in USDT</b> = balance × risk %.<br>
+            <span class="eg">1,000 USDT × 1% = 10 USDT you accept to lose.</span></li>
+        <li><b>Loss per coin at the stop</b> = how far the price moves from entry to stop
+            + the entry fee + the exit fee. A fee is the price × the fee rate
+            (you pay it when you open <i>and</i> when you close).</li>
+        <li><b>Coins</b> = risk in USDT ÷ loss per coin. <b>Position size (USDT)</b> = coins × entry price.<br>
+            <span class="eg">Because fees are inside step 2, the loss at the stop, fees included, is exactly your risk.</span></li>
+        <li><b>Margin</b> = position size ÷ leverage. Leverage does <i>not</i> change how many USDT you win or lose —
+            it only changes how much money is locked as margin, and how close liquidation is.</li>
+        <li><b>Profit at a take profit</b> = coins × distance from entry to TP − entry fee − exit fee.
+            Each TP is shown as if the whole position closes there.</li>
+        <li><b>Reward-to-risk</b> = profit at TP ÷ loss at stop (after fees).
+            "Before fees" = TP distance ÷ stop distance — what you see on a chart.</li>
+        <li><b>Breakeven</b> = the price where the price move exactly pays both fees.<br>
+            <span class="eg">LONG: entry × (1 + fee) ÷ (1 − fee) &nbsp;·&nbsp; SHORT: entry × (1 − fee) ÷ (1 + fee)</span></li>
+        <li><b>Liquidation (approximate, isolated margin)</b> = the price where your loss has eaten the margin
+            down to the maintenance margin.<br>
+            <span class="eg">LONG: entry × (1 − 1/leverage) ÷ (1 − MMR) &nbsp;·&nbsp; SHORT: entry × (1 + 1/leverage) ÷ (1 + MMR)</span><br>
+            Exchanges add tiers and fees, so the real price differs a little. Keep your stop well before it.</li>
+        <li><b>Minimum leverage</b> (only when margin doesn't fit) = position ÷ (balance − opening fee), rounded up.</li>
+      </ol>
+    </details>
     <p>Not financial advice. Exchanges round position sizes and prices, and each one calculates liquidation a little differently — always double-check on the order screen.</p>
     <p><a href="#test">Run self-test</a></p>
   </footer>
@@ -431,6 +462,15 @@ function runSelfTest() {
   is('"abc" → not a number', M.parseNumber('abc'), NaN);
   is('"-5" → not allowed', M.parseNumber('-5'), NaN);
 
+  section('F. Remembering your inputs (your own saved inputs are put back afterwards)');
+  let before = null;
+  try { before = localStorage.getItem(STORE_KEY); } catch (e) { /* storage blocked */ }
+  const sample = { side: 'short', balance: '1321.11', riskPct: '1', leverage: '7', entry: '66783.9', stop: '67255',
+                   tp1: '65800', tp2: '', tp3: '', feePct: '0.02', mmrPct: '0.5' };
+  saveInputs(sample);
+  is('This browser stores and reads back the inputs', JSON.stringify(loadInputs()) === JSON.stringify(sample), true);
+  try { if (before == null) localStorage.removeItem(STORE_KEY); else localStorage.setItem(STORE_KEY, before); } catch (e) { /* ignore */ }
+
   const passed = rows.filter(r => r.pass === true).length;
   const total = rows.filter(r => !r.header).length;
   return { rows, passed, total };
@@ -459,7 +499,6 @@ function showSelfTest() {
 
 function checkHash() { if (location.hash === '#test') { showSelfTest(); document.getElementById('selftest').scrollIntoView(); } }
 window.addEventListener('hashchange', checkHash);
-checkHash();
 
 /* =====================================================================
    3. PAGE — reads the boxes and shows the results. No math in here.
@@ -647,11 +686,24 @@ function render(res, inp) {
   }
 }
 
+// Remember the last inputs in this browser. Wrapped in try/catch because some browsers
+// block storage (private mode, some ways of opening local files) — then it simply doesn't remember.
+const STORE_KEY = 'futures-calculator.inputs.v1';
+function saveInputs(raw) { try { localStorage.setItem(STORE_KEY, JSON.stringify(raw)); } catch (e) { /* not remembered */ } }
+function loadInputs() {
+  try { const v = JSON.parse(localStorage.getItem(STORE_KEY)); return v && typeof v === 'object' ? v : null; }
+  catch (e) { return null; }
+}
+function fillForm(saved) {
+  for (const k of FIELDS) if (typeof saved[k] === 'string') $(k).value = saved[k];
+  $(saved.side === 'short' ? 'side-short' : 'side-long').checked = true;
+}
+
 function update() {
   const raw = readRaw();
   const inp = toInputs(raw);
   render(FuturesMath.calculate(inp), inp);
-  return raw;
+  saveInputs(raw);
 }
 
 const form = $('form');
@@ -659,8 +711,17 @@ form.addEventListener('input', update);
 form.addEventListener('change', update);
 form.addEventListener('submit', e => e.preventDefault());
 $('summary').addEventListener('click', e => { e.preventDefault(); $('results').scrollIntoView({ behavior: 'smooth', block: 'start' }); });
+$('clearTrade').addEventListener('click', () => {
+  for (const k of ['entry', 'stop', 'tp1', 'tp2', 'tp3']) $(k).value = '';
+  update();
+  $('entry').focus();
+});
+
+const saved = loadInputs();
+if (saved) fillForm(saved);
 for (const k in DEFAULTS) if ($(k).value === '') $(k).value = DEFAULTS[k];
 update();
+checkHash();
 </script>
 </body>
 </html>
