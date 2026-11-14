@@ -245,6 +245,15 @@ Stage 2 — order quantity in contracts:
 - Log: self-test 175/175 (265 / 19692 / 73 contracts, actual risk, below-minimum warning + text, price step, R:R ≥ 2).
   Screen: BTC 261 contracts / 13.17 of 13.21 USDT, ETH 77, SOL 0 + red warning, 2R TP 65741.5.
 
+Stage 3 — sizing mode:
+- *Size by:* **Risk %** | **% of available** (remembered). Slider 0–100% + 25/50/75/100 buttons (remembered).
+  Margin = Available × % (Balance when Available is empty), position = margin × leverage, coins = position ÷ entry,
+  risk = coins × loss per coin → shown in USDT and % of balance; existing red HIGH_RISK above 2%.
+- Near 100%: position trimmed only when margin + opening fee wouldn't fit (your answer); 99% and below unchanged.
+- Risk % box hidden in this mode (Leverage stays). Order box, cautions, open risk all work as before.
+- Log: self-test 192/192 (your case 1250 / 12.5 / 63.475 / 6.35% + HIGH_RISK text; 5%, empty Available, 100% trim,
+  99%, 0%, contracts). Screen: switch, slider, buttons, trim note, back to Risk %, reload.
+
 ## Ideas for later (not built)
 - Split the position across TP1/TP2/TP3 (e.g. 50/30/20%) and show the blended result
 - Round the coin amount to the exchange's step size

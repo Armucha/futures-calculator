@@ -78,6 +78,14 @@
   .seg input:focus-visible + label { outline:3px solid var(--accent); outline-offset:2px; }
   .hint.warn { color:var(--red); font-weight:600; }
   .hint.caution { color:var(--amber-text); font-weight:600; }
+  .avail-block { margin:0 0 12px; }
+  .avail-top { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:2px; }
+  .avail-top b { font-size:1.2rem; font-variant-numeric:tabular-nums; }
+  #availPct { width:100%; height:32px; margin:0; accent-color:var(--accent); }
+  .pct-btns { display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; margin-top:4px; }
+  .pct-btns button { height:38px; border:1px solid var(--line2); border-radius:10px; background:transparent; color:var(--muted);
+                     font:inherit; font-size:.88rem; font-weight:600; cursor:pointer; }
+  .pct-btns button.on { border-color:var(--accent); color:var(--text); background:rgba(88,166,255,.14); }
   #orderHint { margin:-2px 0 10px; }
   #feeLegsHint { margin:4px 0 12px; }
   .check { display:flex; align-items:center; gap:10px; font-size:.92rem; cursor:pointer; }
@@ -202,8 +210,21 @@
           <label class="field"><span>Available (USDT)</span>
             <input id="available" type="text" inputmode="decimal" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="next" placeholder="optional"></label>
         </div>
+        <div class="seg" role="radiogroup" aria-label="How to size the trade">
+          <span class="seg-lbl">Size by:</span>
+          <input type="radio" name="sizeMode" id="sm-risk" value="risk" checked><label for="sm-risk">Risk %</label>
+          <input type="radio" name="sizeMode" id="sm-avail" value="available"><label for="sm-avail">% of available</label>
+        </div>
+        <div id="availBlock" class="avail-block" hidden>
+          <div class="avail-top"><span class="lbl">Margin = this % of Available</span><b id="availPctOut">25%</b></div>
+          <input type="range" id="availPct" min="0" max="100" step="1" value="25" aria-label="Percent of available used as margin">
+          <div class="pct-btns">
+            <button type="button" data-pct="25">25%</button><button type="button" data-pct="50">50%</button>
+            <button type="button" data-pct="75">75%</button><button type="button" data-pct="100">100%</button>
+          </div>
+        </div>
         <div class="row cols-2">
-          <label class="field"><span>Risk (%)</span>
+          <label class="field" id="riskField"><span>Risk (%)</span>
             <input id="riskPct" type="text" inputmode="decimal" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="next" placeholder="e.g. 1"></label>
           <label class="field"><span>Leverage (x)</span>
             <input id="leverage" type="text" inputmode="decimal" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="next" placeholder="e.g. 5"></label>
@@ -363,6 +384,10 @@
             or <b>maker</b> with "TP as limit order".</span></li>
         <li><b>Coins</b> = risk in USDT ÷ loss per coin. <b>Position size (USDT)</b> = coins × entry price.<br>
             <span class="eg">Because fees are inside step 2, the loss at the stop, fees included, is exactly your risk.</span></li>
+        <li><b>Size by "% of available"</b> (instead of Risk %): margin = Available × the % you pick (Balance when
+            Available is empty), position = margin × leverage, coins = position ÷ entry. Your risk is then whatever the
+            stop makes it: loss at stop = coins × loss per coin, shown in USDT and as % of your balance — red above 2%.
+            Near 100% the position is trimmed a little so the margin plus the opening fee still fit.</li>
         <li><b>Order in contracts</b>: MEXC trades whole contracts (1 contract = 0.0001 BTC, 0.01 ETH or 0.1 SOL).
             Contracts = coins ÷ contract size, rounded <b>down</b> to MEXC's step — so the real risk ends up a little
             <i>below</i> your plan, never above. The other results use the exact size; the Order box shows what you
@@ -614,7 +639,8 @@ const FuturesMath = (() => {
   //         coin ('BTC_USDT' …, optional), minStopPct (optional; default per coin),
   //         available (optional: free money for margin), openRisk (optional: USDT already at risk in open trades),
   //         maxOpenRiskPct (optional; default 5),
-  //         contract (optional: { exchange, coin, contractSize, minVol, volStep } → result.order in whole contracts) }
+  //         contract (optional: { exchange, coin, contractSize, minVol, volStep } → result.order in whole contracts),
+  //         sizeMode ('risk' default | 'available') + availPct (margin = this % of Available) }
   // Fees: makerPct + takerPct + orderType ('market' | 'limit') + tpLimit (true = TP is a limit order),
   //       or feePct = one fee for every leg (older callers and tests).
   // Empty boxes are null, unreadable ones NaN.
@@ -622,9 +648,12 @@ const FuturesMath = (() => {
   function calculate(inp) {
     const missing = [], invalid = [], warnings = [];
     const oneFee = 'feePct' in inp;
+    const byAvailable = inp.sizeMode === 'available';    // size from "% of available" instead of a risk %
     const feeRule = v => v >= 0 && v < 10;
     const rules = {
-      balance: v => v > 0, riskPct: v => v > 0 && v <= 100, entry: v => v > 0, stop: v => v > 0,
+      balance: v => v > 0,
+      ...(byAvailable ? { availPct: v => v > 0 && v <= 100 } : { riskPct: v => v > 0 && v <= 100 }),
+      entry: v => v > 0, stop: v => v > 0,
       leverage: v => v >= 1,
       ...(oneFee ? { feePct: feeRule } : { makerPct: feeRule, takerPct: feeRule }),
       mmrPct: v => v >= 0 && v < 100,
@@ -666,9 +695,23 @@ const FuturesMath = (() => {
 
     const fees = oneFee ? feeLegsOf(inp.feePct / 100) : feeLegs(inp.makerPct, inp.takerPct, inp.orderType, inp.tpLimit);
     const mmr = inp.mmrPct / 100;
-    const riskAmount = inp.balance * inp.riskPct / 100;
     const lpc = lossPerCoin(inp.side, inp.entry, inp.stop, fees);
-    const qty = riskAmount / lpc;
+    let riskAmount, qty, trimmedForFee = false;
+    if (byAvailable) {
+      // Margin = % of Available (of the Balance when Available is empty); position = margin × leverage.
+      // Near 100% the position is trimmed so margin + opening fee still fit, like the exchange's own slider.
+      const funds = opt.available != null ? opt.available : inp.balance;
+      let position = funds * inp.availPct / 100 * inp.leverage;
+      const maxPosition = funds / (1 / inp.leverage + fees.entry) * (1 - 1e-12);   // margin + fee = all of it
+      if (position > maxPosition) { position = maxPosition; trimmedForFee = true; }
+      qty = position / inp.entry;
+      riskAmount = qty * lpc;                              // your risk is whatever the stop makes it
+      const pct = riskAmount / inp.balance * 100;
+      if (pct > RISK_LIMIT_PCT) warnings.push({ code: 'HIGH_RISK', riskPct: pct });
+    } else {
+      riskAmount = inp.balance * inp.riskPct / 100;
+      qty = riskAmount / lpc;
+    }
     const r = evaluate({ side: inp.side, entry: inp.entry, stop: inp.stop, tps, qty,
                          leverage: inp.leverage, fees, mmr, balance: inp.balance, available: opt.available });
 
@@ -715,7 +758,9 @@ const FuturesMath = (() => {
       }
     }
     return Object.assign({ status: 'ok', missing, invalid, riskAmount, warnings: sortW(), cautions,
-                           totalOpenRisk, totalOpenRiskPct, openRiskLimitPct, order }, r);
+                           totalOpenRisk, totalOpenRiskPct, openRiskLimitPct, order,
+                           sizeMode: byAvailable ? 'available' : 'risk', riskPctUsed: riskAmount / inp.balance * 100,
+                           trimmedForFee }, r);
   }
 
   return { RISK_LIMIT_PCT, MIN_RR, MIN_STOP_PCT, FEE_SHARE_LIMIT_PCT, MARGIN_SHARE_LIMIT_PCT, MAX_OPEN_RISK_PCT, parseNumber, lossPerCoin, closeAt, breakevenPrice,
@@ -1021,6 +1066,32 @@ function runSelfTest() {
   is('Price step: SHORT stop from TP rounded DOWN (towards entry)', stopText(M.stopForR('short', 1830, 1667.8, 0.0002, 2).stop, 'short', 1830, 1667.8, 0.01), '1910');
   is('Price step 1 keeps the zeros of whole numbers', tpText(65759.2, 'long', 65000, 64000, 1), '65760');
 
+  section('N. Size by "% of available" (balance 1000, LONG 100 / stop 95, 10x, Market, taker 0.04%)');
+  const pa = changes => M.calculate(Object.assign({ side: 'long', balance: 1000, available: 500, leverage: 10, entry: 100, stop: 95,
+    tps: [110, null, null], makerPct: 0.01, takerPct: 0.04, orderType: 'market', tpLimit: false, mmrPct: 0.5,
+    sizeMode: 'available', availPct: 25 }, changes));
+  const n1 = pa({});
+  near('Available 500, slider 25% → position (USDT)', n1.positionUsdt, 1250, 1e-9);
+  near('   coins', n1.qty, 12.5, 1e-12);
+  near('   margin = 25% of available', n1.margin, 125, 1e-9);
+  near('   loss at stop incl. fees (USDT)', n1.loss.total, 63.475, 1e-9);
+  near('   = % of balance', n1.riskPctUsed, 6.3475, 1e-9);
+  is('   → HIGH_RISK warning', codes(n1), 'HIGH_RISK');
+  is('   warning text', warningText(n1.warnings[0], null), 'You are risking 6.35% of your account — more than 2% per trade.');
+  is('   the Risk % box is not needed in this mode', n1.missing.join(',') || 'none', 'none');
+  const n2 = pa({ availPct: 5 });
+  near('5% → loss as % of balance (below 2%)', n2.riskPctUsed, 1.2695, 1e-9);
+  is('   → no warning', codes(n2), 'none');
+  near('Available empty → 25% of the balance → position', pa({ available: null }).positionUsdt, 2500, 1e-9);
+  const n4 = pa({ availPct: 100 });
+  near('100% → trimmed so margin + opening fee = available → position', n4.positionUsdt, 4980.079681, 1e-5);
+  near('   margin + opening fee (USDT)', n4.margin + n4.openFee, 500, 1e-6);
+  is('   trimmed, and no red "not enough" warning (only high risk)', `${n4.trimmedForFee} / ${codes(n4)}`, 'true / HIGH_RISK');
+  const n5 = pa({ availPct: 99 });
+  is('99% → not trimmed (position 4950)', `${n5.trimmedForFee} / ${n5.positionUsdt.toFixed(6)}`, 'false / 4950.000000');
+  is('0% → asks for more than 0%', pa({ availPct: 0 }).invalid.join(','), 'availPct');
+  is('Order box works here too (BTC contracts for 12.5 coins)', pa({ contract: mexc('BTC_USDT') }).order.contracts, 125000);
+
   const passed = rows.filter(r => r.pass === true).length;
   const total = rows.filter(r => !r.header).length;
   return { rows, passed, total };
@@ -1075,7 +1146,7 @@ const Fmt = {
 const $ = id => document.getElementById(id);
 const h = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 
-const FIELDS = ['balance', 'available', 'riskPct', 'leverage', 'openRisk', 'entry', 'stop', 'tp1', 'tp2', 'tp3',
+const FIELDS = ['balance', 'available', 'riskPct', 'availPct', 'leverage', 'openRisk', 'entry', 'stop', 'tp1', 'tp2', 'tp3',
                 'makerPct', 'takerPct', 'mmrPct'];
 const DEFAULTS = { mmrPct: '0.5', minStopBTC: '0.30', minStopETH: '0.40', minStopSOL: '0.60', maxOpenRiskPct: '5' };
 // Caution settings: the box that holds the minimum stop distance for each coin.
@@ -1085,12 +1156,13 @@ const minStopOk = v => v >= 0 && v < 100;
 const SETTING_IDS = [...Object.values(CAUTION_FIELDS), 'maxOpenRiskPct'];
 const LABELS = { balance: 'Balance', available: 'Available', riskPct: 'Risk %', leverage: 'Leverage',
                  openRisk: 'Risk already open', entry: 'Entry price', stop: 'Stop loss',
-                 tp1: 'Take profit 1', tp2: 'TP 2', tp3: 'TP 3', makerPct: 'Maker fee', takerPct: 'Taker fee',
+                 tp1: 'Take profit 1', tp2: 'TP 2', tp3: 'TP 3', makerPct: 'Maker fee', takerPct: 'Taker fee', availPct: '% of available',
                  mmrPct: 'Maintenance margin' };
 const LIMITS = { balance: 'more than 0', available: '0 or more', riskPct: 'between 0 and 100', leverage: '1 or more',
                  openRisk: '0 or more', entry: 'more than 0',
                  stop: 'more than 0', tp1: 'more than 0', tp2: 'more than 0', tp3: 'more than 0',
-                 makerPct: '0 to 10', takerPct: '0 to 10', mmrPct: '0 to 100' };
+                 makerPct: '0 to 10', takerPct: '0 to 10', mmrPct: '0 to 100', availPct: 'more than 0%' };
+function sizeMode() { const r = document.querySelector('input[name="sizeMode"]:checked'); return r && r.value === 'available' ? 'available' : 'risk'; }
 
 /* Exchange profiles. To add an exchange, add an entry with the same shape.
    MEXC numbers are from MEXC's public contract API
@@ -1172,6 +1244,7 @@ function readRaw() {
   raw.exchange = exchangeId();
   raw.orderType = orderType();
   raw.tpLimit = $('tpLimit').checked;
+  raw.sizeMode = sizeMode();
   raw.feeEdits = feeEdits;
   return raw;
 }
@@ -1185,6 +1258,7 @@ function toInputs(raw) {
            available: n('available'), openRisk: n('openRisk'),
            entry: n('entry'), stop: n('stop'), tps: [n('tp1'), n('tp2'), n('tp3')],
            makerPct: n('makerPct'), takerPct: n('takerPct'), orderType: raw.orderType, tpLimit: raw.tpLimit === true,
+           sizeMode: raw.sizeMode, availPct: n('availPct'),
            mmrPct: n('mmrPct'),
            coin, minStopPct: minStopOk(minStop) ? minStop : null,          // empty or unreadable → the default
            contract: contractFor(raw.exchange, coin),                      // whole-contract order (exchange profile)
@@ -1292,10 +1366,17 @@ function render(res, inp) {
     $(k).classList.toggle('bad', bad);
     $(k).setAttribute('aria-invalid', bad ? 'true' : 'false');
   }
-  const riskKnown = inp.balance > 0 && inp.riskPct > 0 && inp.riskPct <= 100;
-  $('riskHint').textContent = riskKnown
-    ? `If the stop is hit you lose ${Fmt.usdt(inp.balance * inp.riskPct / 100)} USDT, fees included.`
-    : 'Risk = how much of your balance you accept to lose if the stop loss is hit.';
+  if (inp.sizeMode === 'available') {                  // size by % of available: the stop decides the risk
+    $('riskHint').textContent = res.status === 'ok'
+      ? `If the stop is hit you lose ${Fmt.usdt(res.riskAmount)} USDT = ${Fmt.num(res.riskPctUsed, 2)}% of your balance, fees included.` +
+        (res.trimmedForFee ? ' (Trimmed a little so the margin plus the opening fee fit in Available.)' : '')
+      : 'Margin = the chosen % of Available (of Balance when Available is empty); position = margin × leverage.';
+  } else {
+    const riskKnown = inp.balance > 0 && inp.riskPct > 0 && inp.riskPct <= 100;
+    $('riskHint').textContent = riskKnown
+      ? `If the stop is hit you lose ${Fmt.usdt(inp.balance * inp.riskPct / 100)} USDT, fees included.`
+      : 'Risk = how much of your balance you accept to lose if the stop loss is hit.';
+  }
 
   for (const id of SETTING_IDS) {                       // caution settings: red border if unreadable
     const v = FuturesMath.parseNumber($(id).value);
@@ -1355,7 +1436,7 @@ function render(res, inp) {
   }
 
   setBig('o-loss', '−' + Fmt.usdt(res.loss.total), 'USDT', 'neg');
-  $('o-loss-sub').textContent =
+  $('o-loss-sub').textContent = (res.sizeMode === 'available' ? `= ${Fmt.num(res.riskPctUsed, 2)}% of your balance · ` : '') +
     `${Fmt.usdt(res.loss.price)} price move + ${Fmt.usdt(res.loss.fees)} fees · stop is ${Fmt.num(res.stopDistancePct, 2)}% away`;
 
   setBig('o-be', P(res.breakeven));
@@ -1414,6 +1495,7 @@ function fillForm(saved) {
   if (typeof saved.exchange === 'string' && EXCHANGES[saved.exchange]) $('exchange').value = saved.exchange;
   if (saved.orderType === 'market' || saved.orderType === 'limit') $(saved.orderType === 'limit' ? 'ot-limit' : 'ot-market').checked = true;
   $('tpLimit').checked = saved.tpLimit === true;
+  if (saved.sizeMode === 'available' || saved.sizeMode === 'risk') $(saved.sizeMode === 'available' ? 'sm-avail' : 'sm-risk').checked = true;
   if (saved.feeEdits && typeof saved.feeEdits === 'object') feeEdits = saved.feeEdits;
 }
 
@@ -1567,7 +1649,17 @@ function syncMarketEntry() {
                              'the Market order uses the entry you type. Opening fee = taker.' };
 }
 
+// "Size by": Risk % shows the Risk box; "% of available" shows the slider instead.
+function syncSizeMode() {
+  const byAvail = sizeMode() === 'available';
+  $('availBlock').hidden = !byAvail;
+  $('riskField').hidden = byAvail;
+  $('availPctOut').textContent = `${$('availPct').value}%`;
+  document.querySelectorAll('.pct-btns button').forEach(b => b.classList.toggle('on', b.dataset.pct === $('availPct').value));
+}
+
 function update() {
+  syncSizeMode();
   const market = syncMarketEntry();
   $('orderHint').textContent = market.note;
   $('orderHint').classList.toggle('caution', Boolean(market.warn));
@@ -1607,6 +1699,10 @@ form.addEventListener('input', onFormEdit);
 form.addEventListener('change', onFormEdit);
 form.addEventListener('submit', e => e.preventDefault());
 $('summary').addEventListener('click', e => { e.preventDefault(); $('results').scrollIntoView({ behavior: 'smooth', block: 'start' }); });
+document.querySelectorAll('.pct-btns button').forEach(b => b.addEventListener('click', () => {   // 25 / 50 / 75 / 100%
+  $('availPct').value = b.dataset.pct;
+  $('availPct').dispatchEvent(new Event('input', { bubbles: true }));
+}));
 $('clearTrade').addEventListener('click', () => {
   for (const k of ['entry', 'stop', 'tp1', 'tp2', 'tp3']) $(k).value = '';
   update();

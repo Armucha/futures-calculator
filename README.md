@@ -24,6 +24,10 @@ local files. The calculator still works; it just starts empty each time.
 ## How to use it
 
 1. **Account:** your balance (USDT), how much of it you are willing to lose on this trade (%), and leverage.
+   **Size by:** *Risk %* (as above), or *% of available*: a slider (0–100%, plus 25/50/75/100% buttons like
+   MEXC) sets margin = Available × % (Balance when Available is empty), and position = margin × leverage. The
+   calculator then shows the loss at the stop in USDT and as % of your balance, red above 2%. Near 100% the
+   position is trimmed a little so the margin plus the opening fee still fit.
    **Already in a trade?** Two optional boxes:
    - **Available (USDT):** the money not yet used as margin. This trade's margin (and minimum leverage) is
      checked against it. Your risk is still a % of the whole Balance. Empty = use Balance as before.
@@ -116,6 +120,7 @@ balance, you get the red warning instead of the amber one. The 5% open-risk limi
 | Loss per coin at stop | stop distance + entry fee + exit fee | What 1 coin costs you if the stop is hit, fees included. |
 | **Coins** | risk ÷ loss per coin | So the loss at the stop, fees included, is **exactly** your risk. |
 | Position size (USDT) | coins × entry | |
+| Size by % of available | margin = Available × %, position = margin × leverage, coins = position ÷ entry | Then the risk is what the stop makes it: loss at stop = coins × loss per coin (shown as % of balance). |
 | Order (contracts) | coins ÷ contract size, rounded **down** to MEXC's step | MEXC trades whole contracts (BTC 0.0001, ETH 0.01, SOL 0.1). Rounding down keeps the real risk at or below the plan. |
 | Margin | position ÷ leverage | Leverage does **not** change how much you win or lose. It only changes how much money is locked, and how close liquidation is. |
 | Profit at a TP | coins × TP distance − entry fee − exit fee | Shown as if the whole position closes at that TP. |
@@ -152,11 +157,11 @@ To make the calculator size exactly this trade, enter **balance 1321.11** and **
 | Position (balance 1321.11, risk 1%) | ≈ 1772 | **1,771.99 USDT** | ✅ |
 | Loss at stop incl. fees = chosen risk | exactly | difference **0.000000000** | ✅ |
 
-The self-test has 175 checks in total: your trade, a LONG trade, every warning,
+The self-test has 192 checks in total: your trade, a LONG trade, every warning,
 number reading (`66783,9`, `66,783.9`, `1,772` = 1772, `0,025` = 0.025, spaces), remembering inputs, reading MEXC messages
 (real samples, plus broken, negative and wrong-coin messages), take profit from a ratio, stop loss from a
 take profit, the amber cautions, being in a trade already (Available, risk already open), and exchange fees
-(Market / Limit entry, TP as limit order), and the order in whole contracts. All pass.
+(Market / Limit entry, TP as limit order), the order in whole contracts, and sizing by % of available. All pass.
 
 Exchange fees (balance 1000, risk 1%, LONG 100 / stop 95 / TP 110, maker 0.01%, taker 0.04%):
 
@@ -175,6 +180,15 @@ Order in whole MEXC contracts (rounded down; one fee 0.02% unless stated):
 | SOL LONG 100 / 95, balance 100, risk 0.1% | 0.2 | **0** → red: below MEXC's minimum of 1 | 0 (0.10) |
 
 Calculated TP/stop on MEXC's price step: BTC SHORT 2R TP 65761.5753 → **65761.5** (R:R after fees 2.00015, still ≥ 2).
+
+Size by % of available (balance 1000, LONG 100 / stop 95, 10x, Market, taker 0.04%):
+
+| Available, slider | Position | Coins | Loss at stop | |
+|---|---|---|---|---|
+| 500, 25% | **1,250 USDT** | **12.5** | **63.475 USDT = 6.35%** | red: risk above 2% |
+| 500, 5% | 250 USDT | 2.5 | 12.695 USDT = 1.27% | no warning |
+| empty (uses Balance), 25% | 2,500 USDT | 25 | 126.95 USDT | |
+| 500, 100% | 4,980.08 USDT (trimmed: margin + fee = 500) | 49.80 | 252.89 USDT | no false "not enough" warning |
 
 Cautions (fee 0.02%, MMR 0.5%, default minimums):
 
