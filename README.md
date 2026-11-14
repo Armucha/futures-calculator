@@ -68,6 +68,23 @@ Sources: MEXC futures WebSocket docs for the
 [ping](https://www.mexc.com/api-docs/futures/websocket-api/command-details-for-data-exchange) and the
 [ticker](https://www.mexc.com/api-docs/futures/websocket-api/get-a-single-ticker).
 
+## Red warnings and amber cautions
+
+**Red** = a real problem: stop on the wrong side, liquidation before the stop, margin bigger than your balance,
+TP on the wrong side, reward-to-risk below 1.5, risk above 2%.
+
+**Amber** = advice, not an error:
+
+| Caution | When | Message |
+|---|---|---|
+| Tight stop | stop closer to entry than the minimum for the coin picked under Live price: BTC 0.30%, ETH 0.40%, SOL 0.60% | "Stop is only X% away. ETH often moves that much in minutes, so normal noise could hit it." |
+| High fees | fees are more than 10% of the loss at the stop | "Fees are X% of your loss. Tight stops make fees expensive." |
+| High margin | margin is more than 50% of your balance | "This trade uses X% of your balance as margin, leaving little room for other trades." |
+
+Change the minimum stop distances under **Caution settings** (collapsed at the bottom of the inputs); they are
+remembered. Set one to 0 to turn the tight-stop caution off for that coin. When the margin is more than your whole
+balance, you get the red warning instead of the amber one.
+
 ## The formulas, in simple words
 
 *Fee* = price × fee rate. You pay it twice: when you open and when you close.
@@ -113,10 +130,18 @@ To make the calculator size exactly this trade, enter **balance 1321.11** and **
 | Position (balance 1321.11, risk 1%) | ≈ 1772 | **1,771.99 USDT** | ✅ |
 | Loss at stop incl. fees = chosen risk | exactly | difference **0.000000000** | ✅ |
 
-The self-test has 97 checks in total: your trade, a LONG trade, every warning,
+The self-test has 119 checks in total: your trade, a LONG trade, every warning,
 number reading (`66783,9`, `66,783.9`, `1,772` = 1772, `0,025` = 0.025, spaces), remembering inputs, reading MEXC messages
-(real samples, plus broken, negative and wrong-coin messages), take profit from a ratio, and stop loss from a
-take profit. All pass.
+(real samples, plus broken, negative and wrong-coin messages), take profit from a ratio, stop loss from a
+take profit, and the amber cautions. All pass.
+
+Cautions (fee 0.02%, MMR 0.5%, default minimums):
+
+| Trade | Tight stop | High fees | High margin |
+|---|---|---|---|
+| ETH SHORT, balance 291.03, risk 2%, 7x, 1813 / stop 1820.16 | yes (0.39% < 0.40%) | no (9.2%) | yes (65.7%) |
+| BTC LONG, balance 1000, risk 1%, 10x, 1000 / stop 998 | yes (0.20% < 0.30%) | yes (16.7%) | no (41.7%) |
+| BTC LONG, balance 1000, risk 1%, 5x, 1000 / stop 980 | no | no | no |
 
 Take profit from a ratio (fee 0.02% unless stated). R:R after fees comes out exactly as chosen in every case:
 

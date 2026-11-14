@@ -9,7 +9,7 @@
 <style>
   :root {
     --bg:#0d1117; --card:#161b22; --input:#0f141a; --line:#2a313c; --line2:#3a434f;
-    --text:#e6edf3; --muted:#8b949e; --faint:#5c6672; --accent:#58a6ff; --amber:#d29922;
+    --text:#e6edf3; --muted:#8b949e; --faint:#5c6672; --accent:#58a6ff; --amber:#d29922; --amber-text:#e3b341;
     --green:#3fb950; --red:#ff6b6b; --red-bg:rgba(255,107,107,.10);
   }
   * { box-sizing: border-box; }
@@ -94,6 +94,14 @@
   .warnings { border:1px solid var(--red); background:var(--red-bg); border-radius:12px; padding:8px 12px; margin-bottom:12px; }
   .warnings p { margin:0; padding:5px 0 5px 24px; position:relative; color:var(--red); font-weight:600; font-size:.95rem; }
   .warnings p::before { content:"⚠"; position:absolute; left:0; }
+  /* cautions: amber advice, not errors */
+  .cautions { border:1px solid var(--amber); background:rgba(210,153,34,.10); border-radius:12px; padding:8px 12px; margin-bottom:12px; }
+  .cautions .c-head { font-size:.75rem; text-transform:uppercase; letter-spacing:.08em; font-weight:700; color:var(--amber-text); padding-top:2px; }
+  .cautions p { margin:0; padding:5px 0 5px 24px; position:relative; color:var(--amber-text); font-weight:600; font-size:.95rem; }
+  .cautions p::before { content:"⚠"; position:absolute; left:0; }
+  .settings > summary { cursor:pointer; font-size:.78rem; text-transform:uppercase; letter-spacing:.09em; color:var(--muted); font-weight:600; }
+  .settings[open] > summary { margin-bottom:8px; }
+  .settings .lbl { margin:10px 0 4px; }
   .placeholder { color:var(--muted); padding:22px 16px; border:1px dashed var(--line2); border-radius:14px; text-align:center; }
   .tiles { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
   .tile { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:12px 14px; min-width:0; }
@@ -116,7 +124,9 @@
              background:rgba(13,17,23,.95); border-bottom:1px solid var(--line); color:var(--muted); font-size:.85rem; text-decoration:none; font-variant-numeric:tabular-nums; }
   .summary b { font-size:1rem; color:var(--text); }
   .summary b.pos { color:var(--green); } .summary b.neg { color:var(--red); }
-  .summary .wcount { color:var(--red); font-weight:700; margin-left:auto; }
+  .summary .counts { margin-left:auto; display:inline-flex; gap:10px; }
+  .summary .wcount { color:var(--red); font-weight:700; }
+  .summary .ccount { color:var(--amber-text); font-weight:700; }
 
   .foot { color:var(--muted); font-size:.85rem; margin-top:24px; border-top:1px solid var(--line); padding-top:12px; }
   .how { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:12px 14px; color:var(--text); font-size:.92rem; }
@@ -258,11 +268,29 @@
         </div>
         <p class="hint">Defaults: taker fee 0.02%, maintenance margin 0.5%. Change them to match your exchange. You can type <b>.</b> or <b>,</b> for decimals — but a comma followed by exactly 3 digits counts as thousands (<b>1,772</b> = 1772; <b>0,025</b> stays 0.025).</p>
       </section>
+
+      <details class="card settings" id="cautionSettings">
+        <summary>Caution settings</summary>
+        <p class="hint">Amber cautions are advice, not errors. A stop closer to the entry than the minimum below gets a
+          "tight stop" caution, for the coin picked under Live price. Set 0 to turn it off for that coin.</p>
+        <div class="lbl">Minimum stop distance (%)</div>
+        <div class="row cols-3">
+          <label class="field"><span>BTC</span>
+            <input id="minStopBTC" type="text" inputmode="decimal" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="next" placeholder="0.30"></label>
+          <label class="field"><span>ETH</span>
+            <input id="minStopETH" type="text" inputmode="decimal" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="next" placeholder="0.40"></label>
+          <label class="field"><span>SOL</span>
+            <input id="minStopSOL" type="text" inputmode="decimal" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="done" placeholder="0.60"></label>
+        </div>
+        <p class="hint">Always on: a caution when fees are more than 10% of the loss at the stop, and when the margin is
+          more than 50% of your balance.</p>
+      </details>
     </form>
 
     <section id="results" class="results" aria-labelledby="results-h">
       <h2 id="results-h" class="res-h">Results</h2>
       <div id="warnings" class="warnings" aria-live="polite" hidden></div>
+      <div id="cautions" class="cautions" aria-live="polite" hidden></div>
       <div id="placeholder" class="placeholder"></div>
       <div id="out" class="tiles" hidden>
         <div class="tile"><div class="lbl">Position size</div><div class="big" id="o-pos"></div><div class="sub" id="o-qty"></div></div>
@@ -313,6 +341,11 @@
             <span class="eg">LONG: entry × (1 − 1/leverage) ÷ (1 − MMR) &nbsp;·&nbsp; SHORT: entry × (1 + 1/leverage) ÷ (1 + MMR)</span><br>
             Exchanges add tiers and fees, so the real price differs a little. Keep your stop well before it.</li>
         <li><b>Minimum leverage</b> (only when margin doesn't fit) = position ÷ (balance − opening fee), rounded up.</li>
+        <li><b>Cautions (amber)</b> are advice, not errors:
+            <b>tight stop</b> = stop distance ÷ entry is below the minimum for the coin picked under Live price
+            (BTC 0.30%, ETH 0.40%, SOL 0.60% unless you change them in Caution settings);
+            <b>high fees</b> = fees at the stop ÷ total loss at the stop is above 10%;
+            <b>high margin</b> = margin ÷ balance is above 50%.</li>
       </ol>
     </details>
     <p>Live prices come from MEXC's public futures feed (no account, no API key). Only the coin name is sent to MEXC —
@@ -333,6 +366,10 @@
 const FuturesMath = (() => {
   const RISK_LIMIT_PCT = 2;   // warn above this risk per trade
   const MIN_RR = 1.5;         // warn below this reward-to-risk (after fees)
+  // Cautions — amber advice, not errors:
+  const MIN_STOP_PCT = { BTC_USDT: 0.30, ETH_USDT: 0.40, SOL_USDT: 0.60 }; // default minimum stop distance per coin
+  const FEE_SHARE_LIMIT_PCT = 10;     // fees more than this share of the loss at the stop
+  const MARGIN_SHARE_LIMIT_PCT = 50;  // margin more than this share of the balance
 
   // +1 for LONG, -1 for SHORT. Multiplying a price move by this turns it into
   // "good for me" (positive) or "bad for me" (negative).
@@ -468,14 +505,18 @@ const FuturesMath = (() => {
       stopDistancePct: stopDistance / t.entry * 100,
       takeProfits, breakeven: breakevenPrice(t.side, t.entry, t.fee),
       liquidation, liqBeforeStop, notEnoughBalance, minLeverage,
+      feeSharePct: loss.fees / loss.total * 100,                               // fees as % of the loss at the stop
+      marginSharePct: t.balance != null ? margin / t.balance * 100 : null,     // margin as % of the balance
     };
   }
 
   const WARNING_ORDER = ['STOP_WRONG_SIDE', 'LIQ_BEFORE_STOP', 'NOT_ENOUGH_BALANCE', 'TP_WRONG_SIDE', 'LOW_RR', 'HIGH_RISK'];
 
   // The full calculator. Percent inputs are in percent (feePct 0.02 means 0.02%).
-  // inp = { side, balance, riskPct, entry, stop, tps:[tp1,tp2,tp3], leverage, feePct, mmrPct }
+  // inp = { side, balance, riskPct, entry, stop, tps:[tp1,tp2,tp3], leverage, feePct, mmrPct,
+  //         coin ('BTC_USDT' …, optional), minStopPct (optional; default per coin) }
   // Empty boxes are null, unreadable ones NaN.
+  // Returns red `warnings` (real problems) and amber `cautions` (advice) separately.
   function calculate(inp) {
     const missing = [], invalid = [], warnings = [];
     const rules = {
@@ -501,8 +542,8 @@ const FuturesMath = (() => {
     if (stopWrong) warnings.push({ code: 'STOP_WRONG_SIDE', side: inp.side, entry: inp.entry, stop: inp.stop });
 
     const sortW = () => warnings.sort((a, b) => WARNING_ORDER.indexOf(a.code) - WARNING_ORDER.indexOf(b.code));
-    if (missing.length || invalid.length) return { status: 'incomplete', missing, invalid, warnings: sortW() };
-    if (stopWrong) return { status: 'blocked', missing, invalid, warnings: sortW() };
+    if (missing.length || invalid.length) return { status: 'incomplete', missing, invalid, warnings: sortW(), cautions: [] };
+    if (stopWrong) return { status: 'blocked', missing, invalid, warnings: sortW(), cautions: [] };
 
     const fee = inp.feePct / 100, mmr = inp.mmrPct / 100;
     const riskAmount = inp.balance * inp.riskPct / 100;
@@ -516,10 +557,22 @@ const FuturesMath = (() => {
       if (!tp.rightSide) warnings.push({ code: 'TP_WRONG_SIDE', n: tp.n, price: tp.price });
       else if (tp.rrAfterFees < MIN_RR) warnings.push({ code: 'LOW_RR', n: tp.n, rr: tp.rrAfterFees });
     }
-    return Object.assign({ status: 'ok', missing, invalid, riskAmount, warnings: sortW() }, r);
+
+    // Cautions (amber): advice about a trade that is otherwise valid.
+    const cautions = [];
+    const coin = inp.coin;
+    const minStop = Number.isFinite(inp.minStopPct) && inp.minStopPct >= 0 ? inp.minStopPct : MIN_STOP_PCT[coin];
+    if (coin && minStop > 0 && r.stopDistancePct < minStop) {            // minimum 0 = this caution is off
+      cautions.push({ code: 'TIGHT_STOP', coin, stopPct: r.stopDistancePct, minStopPct: minStop });
+    }
+    if (r.feeSharePct > FEE_SHARE_LIMIT_PCT) cautions.push({ code: 'HIGH_FEES', feeSharePct: r.feeSharePct });
+    if (!r.notEnoughBalance && r.marginSharePct > MARGIN_SHARE_LIMIT_PCT) {  // over 100% is already a red warning
+      cautions.push({ code: 'HIGH_MARGIN', marginSharePct: r.marginSharePct });
+    }
+    return Object.assign({ status: 'ok', missing, invalid, riskAmount, warnings: sortW(), cautions }, r);
   }
 
-  return { RISK_LIMIT_PCT, MIN_RR, parseNumber, lossPerCoin, closeAt, breakevenPrice,
+  return { RISK_LIMIT_PCT, MIN_RR, MIN_STOP_PCT, FEE_SHARE_LIMIT_PCT, MARGIN_SHARE_LIMIT_PCT, parseNumber, lossPerCoin, closeAt, breakevenPrice,
            liquidationPrice, takeProfitForR, stopForR, evaluate, calculate };
 })();
 
@@ -690,6 +743,45 @@ function runSelfTest() {
   is('1.5R stop as shown in the box → no "below 1.5" warning', codes(M.calculate({ side: 'short', balance: 1321.11,
      riskPct: 1, entry: 66783.9, stop: stopBox15, tps: [65800, null, null], leverage: 7, feePct: 0.02, mmrPct: 0.5 })), 'none');
 
+  section('J. Cautions — amber advice, not errors (fee 0.02%, MMR 0.5%, default minimums)');
+  const yes = (res, code) => (res.cautions.some(c => c.code === code) ? 'yes' : 'no');
+  const cz = res => res.cautions.map(c => c.code).join(',') || 'none';
+  const ctext = (res, code) => warningText(res.cautions.find(c => c.code === code), null);
+  const ethTrade = { coin: 'ETH_USDT', side: 'short', balance: 291.03, riskPct: 2, leverage: 7, entry: 1813, stop: 1820.16,
+                     tps: [1796.5, null, null], feePct: 0.02, mmrPct: 0.5 };
+  const j1 = M.calculate(ethTrade);
+  is('ETH SHORT 1813 / stop 1820.16 → TIGHT_STOP (0.39% < 0.40%)', yes(j1, 'TIGHT_STOP'), 'yes');
+  is('   → HIGH_FEES no (fees ≈ 9.2% of the loss)', yes(j1, 'HIGH_FEES'), 'no');
+  is('   → HIGH_MARGIN yes (≈ 65.7%)', yes(j1, 'HIGH_MARGIN'), 'yes');
+  near('   stop distance (%)', j1.stopDistancePct, 0.3949, 0.0001);
+  near('   fees as % of the loss', j1.feeSharePct, 9.2135, 0.001);
+  near('   margin as % of the balance', j1.marginSharePct, 65.6808, 0.001);
+  is('   no red warnings', codes(j1), 'none');
+  is('   tight-stop text names the coin', ctext(j1, 'TIGHT_STOP'),
+     'Stop is only 0.39% away. ETH often moves that much in minutes, so normal noise could hit it.');
+  is('   margin text', ctext(j1, 'HIGH_MARGIN'),
+     'This trade uses 65.7% of your balance as margin, leaving little room for other trades.');
+  const j2 = M.calculate({ coin: 'BTC_USDT', side: 'long', balance: 1000, riskPct: 1, leverage: 10, entry: 1000, stop: 998,
+                           tps: [1010, null, null], feePct: 0.02, mmrPct: 0.5 });
+  is('BTC LONG 1000 / stop 998, 10x → TIGHT_STOP (0.20% < 0.30%)', yes(j2, 'TIGHT_STOP'), 'yes');
+  is('   → HIGH_FEES yes (≈ 16.7%)', yes(j2, 'HIGH_FEES'), 'yes');
+  is('   → HIGH_MARGIN no', yes(j2, 'HIGH_MARGIN'), 'no');
+  near('   fees as % of the loss', j2.feeSharePct, 16.6528, 0.001);
+  is('   tight-stop text names the coin', ctext(j2, 'TIGHT_STOP'),
+     'Stop is only 0.20% away. BTC often moves that much in minutes, so normal noise could hit it.');
+  is('   fees text', ctext(j2, 'HIGH_FEES'), 'Fees are 16.7% of your loss. Tight stops make fees expensive.');
+  const j3 = M.calculate({ coin: 'BTC_USDT', side: 'long', balance: 1000, riskPct: 1, leverage: 5, entry: 1000, stop: 980,
+                           tps: [1040, null, null], feePct: 0.02, mmrPct: 0.5 });
+  is('BTC LONG 1000 / stop 980, 5x → no cautions at all', cz(j3), 'none');
+  is('   and no red warnings', codes(j3), 'none');
+  is('Your own ETH minimum 0.35% → no tight-stop caution', yes(M.calculate(Object.assign({}, ethTrade, { minStopPct: 0.35 })), 'TIGHT_STOP'), 'no');
+  is('Minimum 0 turns the tight-stop caution off', yes(M.calculate(Object.assign({}, ethTrade, { minStopPct: 0 })), 'TIGHT_STOP'), 'no');
+  is('Same stop with SOL picked (minimum 0.60%) → tight', yes(M.calculate(Object.assign({}, ethTrade, { coin: 'SOL_USDT' })), 'TIGHT_STOP'), 'yes');
+  const over = calc({ balance: 100, riskPct: 2, stop: 99, tps: [103, null, null], leverage: 1, feePct: 0.02 });
+  is('Margin more than the balance → red warning only, no amber margin caution', codes(over) + ' / ' + cz(over), 'NOT_ENOUGH_BALANCE / none');
+  is('2x trade that uses 96% of the balance → amber margin caution', cz(calc({ balance: 100, riskPct: 2, stop: 99,
+     tps: [103, null, null], leverage: 2, feePct: 0.02 })), 'HIGH_MARGIN');
+
   const passed = rows.filter(r => r.pass === true).length;
   const total = rows.filter(r => !r.header).length;
   return { rows, passed, total };
@@ -745,7 +837,10 @@ const $ = id => document.getElementById(id);
 const h = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 
 const FIELDS = ['balance', 'riskPct', 'leverage', 'entry', 'stop', 'tp1', 'tp2', 'tp3', 'feePct', 'mmrPct'];
-const DEFAULTS = { feePct: '0.02', mmrPct: '0.5' };
+const DEFAULTS = { feePct: '0.02', mmrPct: '0.5', minStopBTC: '0.30', minStopETH: '0.40', minStopSOL: '0.60' };
+// Caution settings: the box that holds the minimum stop distance for each coin.
+const CAUTION_FIELDS = { BTC_USDT: 'minStopBTC', ETH_USDT: 'minStopETH', SOL_USDT: 'minStopSOL' };
+const minStopOk = v => v >= 0 && v < 100;
 const LABELS = { balance: 'Balance', riskPct: 'Risk %', leverage: 'Leverage', entry: 'Entry price', stop: 'Stop loss',
                  tp1: 'Take profit 1', tp2: 'TP 2', tp3: 'TP 3', feePct: 'Taker fee', mmrPct: 'Maintenance margin' };
 const LIMITS = { balance: 'more than 0', riskPct: 'between 0 and 100', leverage: '1 or more', entry: 'more than 0',
@@ -760,14 +855,18 @@ function readRaw() {
   raw.calcDir = calcDir();           // remembered: 'tp' (TP from stop) or 'stop' (stop from TP)
   raw.tpMode = tpMode();             // remembered: Manual, 1.5, 2, 3, custom or ladder
   raw.customR = $('customR').value;
+  for (const id of Object.values(CAUTION_FIELDS)) raw[id] = $(id).value;   // caution settings, remembered
   return raw;
 }
 
 function toInputs(raw) {
   const n = k => FuturesMath.parseNumber(raw[k]);
+  const coin = CAUTION_FIELDS[raw.symbol] ? raw.symbol : 'BTC_USDT';      // the coin picked under Live price
+  const minStop = n(CAUTION_FIELDS[coin]);
   return { side: raw.side, balance: n('balance'), riskPct: n('riskPct'), leverage: n('leverage'),
            entry: n('entry'), stop: n('stop'), tps: [n('tp1'), n('tp2'), n('tp3')],
-           feePct: n('feePct'), mmrPct: n('mmrPct') };
+           feePct: n('feePct'), mmrPct: n('mmrPct'),
+           coin, minStopPct: minStopOk(minStop) ? minStop : null };       // empty or unreadable → the default
 }
 
 // Show prices with one more decimal than you typed (min 2), and enough digits for tiny coins.
@@ -798,6 +897,14 @@ function warningText(w, P) {
       return `You are risking ${Fmt.num(w.riskPct, 2).replace(/\.?0+$/, '')}% of your account — more than ${FuturesMath.RISK_LIMIT_PCT}% per trade.`;
     case 'NO_AUTO_STOP':
       return w.text;
+    // amber cautions
+    case 'TIGHT_STOP':   // rounded down, so it never shows the same number as the minimum
+      return `Stop is only ${(Math.floor(w.stopPct * 100 + 1e-9) / 100).toFixed(2)}% away. ${w.coin.split('_')[0]} often moves ` +
+             'that much in minutes, so normal noise could hit it.';
+    case 'HIGH_FEES':
+      return `Fees are ${w.feeSharePct.toFixed(1)}% of your loss. Tight stops make fees expensive.`;
+    case 'HIGH_MARGIN':
+      return `This trade uses ${w.marginSharePct.toFixed(1)}% of your balance as margin, leaving little room for other trades.`;
   }
   return w.code;
 }
@@ -830,8 +937,13 @@ function renderSummary(res) {
   } else {
     s.append(h('span', null, 'Results appear below as you type'));
   }
-  const n = res.warnings.length;
-  if (n) s.append(h('span', 'wcount', `⚠ ${n} warning${n > 1 ? 's' : ''}`));
+  const n = res.warnings.length, c = (res.cautions || []).length;
+  if (n || c) {
+    const counts = h('span', 'counts');
+    if (n) counts.append(h('span', 'wcount', `⚠ ${n} warning${n > 1 ? 's' : ''}`));
+    if (c) counts.append(h('span', 'ccount', `⚠ ${c} caution${c > 1 ? 's' : ''}`));
+    s.append(counts);
+  }
 }
 
 function render(res, inp) {
@@ -847,9 +959,18 @@ function render(res, inp) {
     ? `If the stop is hit you lose ${Fmt.usdt(inp.balance * inp.riskPct / 100)} USDT, fees included.`
     : 'Risk = how much of your balance you accept to lose if the stop loss is hit.';
 
-  const warnBox = $('warnings');
+  for (const id of Object.values(CAUTION_FIELDS)) {     // caution settings: red border if unreadable
+    const v = FuturesMath.parseNumber($(id).value);
+    $(id).classList.toggle('bad', v != null && !minStopOk(v));
+  }
+
+  const warnBox = $('warnings');                         // red: real problems
   warnBox.replaceChildren(...res.warnings.map(w => h('p', null, warningText(w, P))));
   warnBox.hidden = res.warnings.length === 0;
+  const cautions = res.cautions || [];                   // amber: advice
+  $('cautions').replaceChildren(h('div', 'c-head', cautions.length > 1 ? 'Cautions — advice, not errors' : 'Caution — advice, not an error'),
+                                ...cautions.map(c => h('p', null, warningText(c, P))));
+  $('cautions').hidden = cautions.length === 0;
   renderSummary(res);
 
   if (res.status !== 'ok') {
@@ -923,6 +1044,7 @@ function loadInputs() {
 }
 function fillForm(saved) {
   for (const k of FIELDS) if (typeof saved[k] === 'string') $(k).value = saved[k];
+  for (const id of Object.values(CAUTION_FIELDS)) if (typeof saved[id] === 'string') $(id).value = saved[id];
   $(saved.side === 'short' ? 'side-short' : 'side-long').checked = true;
   const sym = typeof saved.symbol === 'string' && $('sym-' + saved.symbol);
   if (sym) sym.checked = true;

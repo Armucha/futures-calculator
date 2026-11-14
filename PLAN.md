@@ -183,6 +183,22 @@ Log:
   run-tests.sh reported it (exit 2); fixed. Clicked through in Firefox: follows TP 1 / entry / fee, red warnings
   for wrong side / no profit / too close, typing a stop → Manual, Ladder hidden, survives reload; fits at 360 px.
 
+## Feature 6 — Amber cautions (advice, not errors)
+- `calculate()` now returns red `warnings` (unchanged) and amber `cautions` separately, so no red-warning
+  behaviour or test changed.
+- TIGHT_STOP: stop distance % < minimum for the coin picked under Live price (default BTC 0.30 / ETH 0.40 /
+  SOL 0.60; editable in a collapsed "Caution settings" section, remembered; 0 = off; unreadable → default + red box).
+  The % in the text is rounded down, so it never shows the same number as the minimum.
+- HIGH_FEES: fees at the stop > 10% of the total loss at the stop.
+- HIGH_MARGIN: margin > 50% of the balance — skipped when the margin is more than the balance
+  (that is already the red "not enough balance" warning).
+- Amber box under the red one; the phone bar counts warnings (red) and cautions (amber) separately.
+
+Log:
+- 2026-11-14 — Self-test 119/119 (your 3 cases incl. exact texts, settings override, 0 = off, SOL, no double margin
+  warning). Clicked through in Firefox: ETH → 2 cautions, BTC → 1, BTC min 0.5% → 2 naming BTC, "abc" → red box +
+  default, red + amber together, settings remembered and collapsed after reload.
+
 ## Ideas for later (not built)
 - Split the position across TP1/TP2/TP3 (e.g. 50/30/20%) and show the blended result
 - Round the coin amount to the exchange's step size
