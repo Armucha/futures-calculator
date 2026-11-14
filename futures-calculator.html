@@ -7,10 +7,97 @@
 <meta name="theme-color" content="#0d1117">
 <title>Futures Calculator</title>
 <style>
-  :root { --bg:#0d1117; --card:#161b22; --line:#2a313c; --text:#e6edf3; --muted:#8b949e; --green:#3fb950; --red:#ff6b6b; }
+  :root {
+    --bg:#0d1117; --card:#161b22; --input:#0f141a; --line:#2a313c; --line2:#3a434f;
+    --text:#e6edf3; --muted:#8b949e; --faint:#5c6672; --accent:#58a6ff; --amber:#d29922;
+    --green:#3fb950; --red:#ff6b6b; --red-bg:rgba(255,107,107,.10);
+  }
   * { box-sizing: border-box; }
-  body { margin:0; background:var(--bg); color:var(--text); font:16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-  main { max-width: 1040px; margin: 0 auto; padding: 16px; }
+  [hidden] { display: none !important; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin:0; background:var(--bg); color:var(--text); font:16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+  main { max-width: 1100px; margin: 0 auto; padding: 12px 16px 40px; }
+  a { color: var(--accent); }
+
+  header.top { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:4px 0 12px; }
+  h1 { font-size:1.3rem; margin:0; letter-spacing:-.01em; }
+  h2 { font-size:.78rem; text-transform:uppercase; letter-spacing:.09em; color:var(--muted); margin:0 0 10px; font-weight:600; }
+  .btn { background:transparent; color:var(--muted); border:1px solid var(--line2); border-radius:10px; padding:9px 14px; font:inherit; font-size:.9rem; cursor:pointer; }
+  .btn:hover { color:var(--text); border-color:var(--muted); }
+
+  .layout { display:grid; gap:16px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px; }
+  .card + .card { margin-top:12px; }
+  .row { display:grid; gap:10px; margin-bottom:12px; }
+  .row:last-child { margin-bottom:0; }
+  .cols-acct { grid-template-columns: 1.4fr 1fr 1fr; }
+  .cols-2 { grid-template-columns: 1fr 1fr; }
+  .cols-3 { grid-template-columns: repeat(3, 1fr); }
+  .hint { font-size:.8rem; color:var(--muted); margin:8px 0 0; }
+
+  /* input boxes */
+  .field { display:block; min-width:0; }
+  .field > span { display:block; font-size:.8rem; color:var(--muted); margin-bottom:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .field input { width:100%; min-width:0; height:50px; padding:0 12px; font:inherit; font-size:1.15rem; font-variant-numeric:tabular-nums;
+                 color:var(--text); background:var(--input); border:1px solid var(--line2); border-radius:10px; -webkit-appearance:none; appearance:none; }
+  .field input::placeholder { color:var(--faint); }
+  .field input:focus { outline:none; border-color:var(--accent); box-shadow:0 0 0 3px rgba(88,166,255,.25); }
+  .field input.bad { border-color:var(--red); box-shadow:0 0 0 3px rgba(255,107,107,.18); }
+
+  /* LONG / SHORT switch */
+  .side { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:12px; }
+  .side input { position:absolute; opacity:0; pointer-events:none; }
+  .side label { display:flex; align-items:center; justify-content:center; height:50px; border-radius:10px; border:1px solid var(--line2);
+                font-weight:700; letter-spacing:.08em; color:var(--muted); cursor:pointer; user-select:none; -webkit-tap-highlight-color:transparent; }
+  #side-long:checked + label { background:var(--green); border-color:var(--green); color:#04130a; }
+  #side-short:checked + label { background:var(--red); border-color:var(--red); color:#1f0606; }
+  .side input:focus-visible + label { outline:3px solid var(--accent); outline-offset:2px; }
+
+  /* results */
+  .results { scroll-margin-top: 70px; }
+  .res-h { margin:4px 0 10px; }
+  .warnings { border:1px solid var(--red); background:var(--red-bg); border-radius:12px; padding:8px 12px; margin-bottom:12px; }
+  .warnings p { margin:0; padding:5px 0 5px 24px; position:relative; color:var(--red); font-weight:600; font-size:.95rem; }
+  .warnings p::before { content:"⚠"; position:absolute; left:0; }
+  .placeholder { color:var(--muted); padding:22px 16px; border:1px dashed var(--line2); border-radius:14px; text-align:center; }
+  .tiles { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .tile { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:12px 14px; min-width:0; }
+  .tile.wide { grid-column:1 / -1; }
+  .lbl { font-size:.8rem; color:var(--muted); margin-bottom:2px; }
+  .lbl em { font-style:normal; color:var(--amber); font-weight:700; }
+  .big { font-size:clamp(1.45rem, 6.2vw, 2.15rem); font-weight:700; line-height:1.15; font-variant-numeric:tabular-nums; letter-spacing:-.01em; overflow-wrap:anywhere; }
+  .big .unit { font-size:.5em; font-weight:600; color:var(--muted); margin-left:.3em; letter-spacing:0; }
+  .sub { font-size:.82rem; color:var(--muted); margin-top:4px; font-variant-numeric:tabular-nums; }
+  .pos { color:var(--green); }
+  .neg { color:var(--red); }
+  .tp { display:grid; grid-template-columns:1fr auto; gap:2px 12px; padding:10px 0; border-top:1px solid var(--line); }
+  .tp:first-child { border-top:0; padding-top:4px; }
+  .rr { text-align:right; }
+  .rr b { display:block; font-size:clamp(1.3rem, 5.4vw, 1.75rem); line-height:1.15; font-variant-numeric:tabular-nums; }
+  .rr .sub { margin-top:0; }
+
+  /* phone: summary bar that stays on screen while typing */
+  .summary { position:sticky; top:0; z-index:5; display:flex; flex-wrap:wrap; align-items:baseline; gap:2px 11px; margin:0 -16px 12px; padding:8px 16px;
+             background:rgba(13,17,23,.95); border-bottom:1px solid var(--line); color:var(--muted); font-size:.85rem; text-decoration:none; font-variant-numeric:tabular-nums; }
+  .summary b { font-size:1rem; color:var(--text); }
+  .summary b.pos { color:var(--green); } .summary b.neg { color:var(--red); }
+  .summary .wcount { color:var(--red); font-weight:700; margin-left:auto; }
+
+  .foot { color:var(--muted); font-size:.85rem; margin-top:24px; border-top:1px solid var(--line); padding-top:12px; }
+
+  @media (min-width: 860px) {
+    .summary { display:none; }
+    .layout { grid-template-columns: minmax(360px, 430px) 1fr; align-items:start; }
+    .results { position:sticky; top:12px; }
+  }
+  @media (max-width: 380px) {
+    main { padding-left:12px; padding-right:12px; }
+    .summary { margin:0 -12px 12px; padding:8px 12px; }
+    .card { padding:12px; }
+    .cols-3 .field input, .cols-acct .field input { padding:0 8px; font-size:1rem; }
+  }
+  @media (max-width: 330px) { .tiles { grid-template-columns:1fr; } }
+
   /* self-test */
   #selftest { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px; margin-bottom:16px; overflow-x:auto; }
   #selftest h2 { margin:0 0 4px; font-size:1.15rem; }
@@ -25,8 +112,82 @@
 <body>
 <main>
   <section id="selftest" hidden></section>
-  <h1>Futures Calculator</h1>
-  <p>Math engine ready. Screen comes in step 3. <a href="#test" style="color:var(--muted)">Run self-test</a></p>
+
+  <header class="top">
+    <h1>Futures Calculator</h1>
+  </header>
+
+  <a id="summary" class="summary" href="#results"></a>
+
+  <div class="layout">
+    <form id="form" autocomplete="off" novalidate>
+      <section class="card">
+        <h2>Account</h2>
+        <div class="row cols-acct">
+          <label class="field"><span>Balance (USDT)</span>
+            <input id="balance" type="text" inputmode="decimal" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="next" placeholder="e.g. 1000"></label>
+          <label class="field"><span>Risk (%)</span>
+            <input id="riskPct" type="text" inputmode="decimal" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="next" placeholder="e.g. 1"></label>
+          <label class="field"><span>Leverage (x)</span>
+            <input id="leverage" type="text" inputmode="decimal" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="next" placeholder="e.g. 5"></label>
+        </div>
+        <p class="hint" id="riskHint"></p>
+      </section>
+
+      <section class="card">
+        <h2>Trade</h2>
+        <div class="side" role="radiogroup" aria-label="Direction">
+          <input type="radio" name="side" id="side-long" value="long" checked><label for="side-long">LONG</label>
+          <input type="radio" name="side" id="side-short" value="short"><label for="side-short">SHORT</label>
+        </div>
+        <div class="row cols-2">
+          <label class="field"><span>Entry price</span>
+            <input id="entry" type="text" inputmode="decimal" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="next"></label>
+          <label class="field"><span>Stop loss</span>
+            <input id="stop" type="text" inputmode="decimal" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="next"></label>
+        </div>
+        <div class="row cols-3">
+          <label class="field"><span>Take profit 1</span>
+            <input id="tp1" type="text" inputmode="decimal" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="next"></label>
+          <label class="field"><span>TP 2</span>
+            <input id="tp2" type="text" inputmode="decimal" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="next" placeholder="optional"></label>
+          <label class="field"><span>TP 3</span>
+            <input id="tp3" type="text" inputmode="decimal" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="next" placeholder="optional"></label>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Exchange fees</h2>
+        <div class="row cols-2">
+          <label class="field"><span>Taker fee (%)</span>
+            <input id="feePct" type="text" inputmode="decimal" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="next"></label>
+          <label class="field"><span>Maint. margin (%)</span>
+            <input id="mmrPct" type="text" inputmode="decimal" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="done"></label>
+        </div>
+        <p class="hint">Defaults: taker fee 0.02%, maintenance margin 0.5%. Change them to match your exchange. You can type <b>.</b> or <b>,</b> for decimals.</p>
+      </section>
+    </form>
+
+    <section id="results" class="results" aria-labelledby="results-h">
+      <h2 id="results-h" class="res-h">Results</h2>
+      <div id="warnings" class="warnings" aria-live="polite" hidden></div>
+      <div id="placeholder" class="placeholder"></div>
+      <div id="out" class="tiles" hidden>
+        <div class="tile"><div class="lbl">Position size</div><div class="big" id="o-pos"></div><div class="sub" id="o-qty"></div></div>
+        <div class="tile"><div class="lbl">Margin required</div><div class="big" id="o-margin"></div><div class="sub" id="o-margin-sub"></div></div>
+        <div class="tile"><div class="lbl">Loss at stop loss</div><div class="big neg" id="o-loss"></div><div class="sub" id="o-loss-sub"></div></div>
+        <div class="tile"><div class="lbl">Breakeven price</div><div class="big" id="o-be"></div><div class="sub">Closing here = 0 after fees</div></div>
+        <div class="tile wide"><div class="lbl">Take profit — if the whole position closes there</div><div id="o-tps"></div></div>
+        <div class="tile wide"><div class="lbl">Liquidation price <em>approximate</em></div><div class="big" id="o-liq"></div><div class="sub" id="o-liq-sub"></div></div>
+      </div>
+    </section>
+  </div>
+
+  <footer class="foot">
+    <p>Not financial advice. Exchanges round position sizes and prices, and each one calculates liquidation a little differently — always double-check on the order screen.</p>
+    <p><a href="#test">Run self-test</a></p>
+  </footer>
+  <noscript><p class="neg">This calculator needs JavaScript turned on.</p></noscript>
 </main>
 
 <script>
@@ -299,6 +460,207 @@ function showSelfTest() {
 function checkHash() { if (location.hash === '#test') { showSelfTest(); document.getElementById('selftest').scrollIntoView(); } }
 window.addEventListener('hashchange', checkHash);
 checkHash();
+
+/* =====================================================================
+   3. PAGE — reads the boxes and shows the results. No math in here.
+   ===================================================================== */
+const Fmt = {
+  // 1234.5 → "1,234.50". Uses a real minus sign and never shows "−0.00".
+  num(x, d) {
+    if (!Number.isFinite(x)) return '—';
+    const s = Math.abs(x).toFixed(d);
+    const neg = x < 0 && Number(s) !== 0;
+    const [i, f] = s.split('.');
+    return (neg ? '−' : '') + i.replace(/\B(?=(\d{3})+(?!\d))/g, ',') + (f ? '.' + f : '');
+  },
+  signed(x, d) { const s = Fmt.num(x, d); return s[0] !== '−' && Number(Math.abs(x).toFixed(d)) !== 0 ? '+' + s : s; },
+  usdt: x => Fmt.num(x, 2),
+  coins(q) { return Fmt.num(q, q >= 1000 ? 2 : q >= 1 ? 4 : Math.min(10, Math.max(4, Math.ceil(-Math.log10(q)) + 4))); },
+  // How many decimals a number has (66783.9 → 1, 0.00012 → 5).
+  decimalsOf(x) {
+    const m = String(x).match(/^\d+(?:\.(\d+))?(?:e-(\d+))?$/);
+    return m ? (m[1] ? m[1].length : 0) + (m[2] ? Number(m[2]) : 0) : 0;
+  },
+};
+
+const $ = id => document.getElementById(id);
+const h = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+
+const FIELDS = ['balance', 'riskPct', 'leverage', 'entry', 'stop', 'tp1', 'tp2', 'tp3', 'feePct', 'mmrPct'];
+const DEFAULTS = { feePct: '0.02', mmrPct: '0.5' };
+const LABELS = { balance: 'Balance', riskPct: 'Risk %', leverage: 'Leverage', entry: 'Entry price', stop: 'Stop loss',
+                 tp1: 'Take profit 1', tp2: 'TP 2', tp3: 'TP 3', feePct: 'Taker fee', mmrPct: 'Maintenance margin' };
+const LIMITS = { balance: 'more than 0', riskPct: 'between 0 and 100', leverage: '1 or more', entry: 'more than 0',
+                 stop: 'more than 0', tp1: 'more than 0', tp2: 'more than 0', tp3: 'more than 0',
+                 feePct: '0 to 10', mmrPct: '0 to 100' };
+
+function readRaw() {
+  const raw = { side: document.querySelector('input[name="side"]:checked').value };
+  for (const k of FIELDS) raw[k] = $(k).value;
+  return raw;
+}
+
+function toInputs(raw) {
+  const n = k => FuturesMath.parseNumber(raw[k]);
+  return { side: raw.side, balance: n('balance'), riskPct: n('riskPct'), leverage: n('leverage'),
+           entry: n('entry'), stop: n('stop'), tps: [n('tp1'), n('tp2'), n('tp3')],
+           feePct: n('feePct'), mmrPct: n('mmrPct') };
+}
+
+// Show prices with one more decimal than you typed (min 2), and enough digits for tiny coins.
+function priceFormatter(inp) {
+  const typed = [inp.entry, inp.stop, ...inp.tps].filter(v => Number.isFinite(v) && v > 0);
+  const dec = Math.min(10, Math.max(2, Math.max(0, ...typed.map(Fmt.decimalsOf)) + 1));
+  return p => Fmt.num(p, p > 0 && p < 1 ? Math.min(10, Math.max(dec, Math.ceil(-Math.log10(p)) + 3)) : dec);
+}
+
+function warningText(w, P) {
+  switch (w.code) {
+    case 'STOP_WRONG_SIDE':
+      if (w.stop === w.entry) return 'Stop loss is the same as the entry price.';
+      return w.side === 'short'
+        ? `Stop loss is on the wrong side: for a SHORT it must be ABOVE the entry (${P(w.entry)}).`
+        : `Stop loss is on the wrong side: for a LONG it must be BELOW the entry (${P(w.entry)}).`;
+    case 'LIQ_BEFORE_STOP':
+      return `Liquidation (≈ ${P(w.liquidation)}) is reached before your stop loss (${P(w.stop)}). You would be liquidated first — lower the leverage or move the stop.`;
+    case 'NOT_ENOUGH_BALANCE':
+      return Number.isFinite(w.minLeverage)
+        ? `Margin ${Fmt.usdt(w.margin)} USDT (+ ${Fmt.usdt(w.openFee)} opening fee) is more than your balance. Use at least ${w.minLeverage}x leverage.`
+        : 'Your balance is too small even to pay the opening fee.';
+    case 'TP_WRONG_SIDE':
+      return `TP ${w.n} (${P(w.price)}) is on the wrong side of the entry — it would close at a loss.`;
+    case 'LOW_RR':
+      return `TP ${w.n}: reward-to-risk is only ${w.rr.toFixed(2)} after fees — below ${FuturesMath.MIN_RR}.`;
+    case 'HIGH_RISK':
+      return `You are risking ${Fmt.num(w.riskPct, 2).replace(/\.?0+$/, '')}% of your account — more than ${FuturesMath.RISK_LIMIT_PCT}% per trade.`;
+  }
+  return w.code;
+}
+
+function placeholderText(res) {
+  const parts = [];
+  if (res.invalid.length) parts.push('Check: ' + res.invalid.map(k => `${LABELS[k]} (${LIMITS[k]})`).join(', '));
+  if (res.missing.length) parts.push('Fill in: ' + res.missing.map(k => LABELS[k]).join(', '));
+  return parts.join(' · ') || 'Fix the stop loss to see results.';
+}
+
+function setBig(id, text, unit, cls) {
+  const e = $(id);
+  e.replaceChildren(text);
+  if (unit) e.append(h('span', 'unit', unit));
+  e.className = 'big' + (cls ? ' ' + cls : '');
+}
+
+function renderSummary(res) {
+  const s = $('summary');
+  s.replaceChildren();
+  const item = (label, value, cls) => { const sp = h('span', null, label + ' '); sp.append(h('b', cls, value)); s.append(sp); };
+  if (res.status === 'ok') {
+    item('Size', Fmt.usdt(res.positionUsdt));
+    item('Loss', '−' + Fmt.usdt(res.loss.total), 'neg');
+    const tp = res.takeProfits[0];
+    if (tp) item('TP' + tp.n, Fmt.signed(tp.net, 2), tp.net >= 0 ? 'pos' : 'neg');
+    if (tp && tp.rightSide) item('R:R', tp.rrAfterFees.toFixed(2), tp.rrAfterFees >= FuturesMath.MIN_RR ? 'pos' : 'neg');
+  } else {
+    s.append(h('span', null, 'Results appear below as you type'));
+  }
+  const n = res.warnings.length;
+  if (n) s.append(h('span', 'wcount', `⚠ ${n} warning${n > 1 ? 's' : ''}`));
+}
+
+function render(res, inp) {
+  const P = priceFormatter(inp);
+
+  for (const k of FIELDS) {
+    const bad = res.invalid.includes(k);
+    $(k).classList.toggle('bad', bad);
+    $(k).setAttribute('aria-invalid', bad ? 'true' : 'false');
+  }
+  const riskKnown = inp.balance > 0 && inp.riskPct > 0 && inp.riskPct <= 100;
+  $('riskHint').textContent = riskKnown
+    ? `If the stop is hit you lose ${Fmt.usdt(inp.balance * inp.riskPct / 100)} USDT, fees included.`
+    : 'Risk = how much of your balance you accept to lose if the stop loss is hit.';
+
+  const warnBox = $('warnings');
+  warnBox.replaceChildren(...res.warnings.map(w => h('p', null, warningText(w, P))));
+  warnBox.hidden = res.warnings.length === 0;
+  renderSummary(res);
+
+  if (res.status !== 'ok') {
+    $('out').hidden = true;
+    $('placeholder').hidden = false;
+    $('placeholder').textContent = placeholderText(res);
+    return;
+  }
+  $('out').hidden = false;
+  $('placeholder').hidden = true;
+
+  setBig('o-pos', Fmt.usdt(res.positionUsdt), 'USDT');
+  $('o-qty').textContent = `${Fmt.coins(res.qty)} coins`;
+
+  setBig('o-margin', Fmt.usdt(res.margin), 'USDT', res.notEnoughBalance ? 'neg' : '');
+  const mSub = $('o-margin-sub');
+  mSub.className = 'sub' + (res.notEnoughBalance ? ' neg' : '');
+  mSub.textContent = !res.notEnoughBalance
+    ? `at ${inp.leverage}x · ${Fmt.num(res.margin / inp.balance * 100, 1)}% of your balance`
+    : Number.isFinite(res.minLeverage)
+      ? `More than your balance. Minimum leverage: ${res.minLeverage}x`
+      : 'Your balance is too small for this trade.';
+
+  setBig('o-loss', '−' + Fmt.usdt(res.loss.total), 'USDT', 'neg');
+  $('o-loss-sub').textContent =
+    `${Fmt.usdt(res.loss.price)} price move + ${Fmt.usdt(res.loss.fees)} fees · stop is ${Fmt.num(res.stopDistancePct, 2)}% away`;
+
+  setBig('o-be', P(res.breakeven));
+
+  const box = $('o-tps');
+  box.replaceChildren();
+  if (!res.takeProfits.length) box.append(h('div', 'sub', 'Add a take profit to see profit and reward-to-risk.'));
+  for (const tp of res.takeProfits) {
+    const left = h('div');
+    const big = h('div', 'big ' + (tp.net >= 0 ? 'pos' : 'neg'), Fmt.signed(tp.net, 2));
+    big.append(h('span', 'unit', 'USDT'));
+    left.append(h('div', 'lbl', `TP ${tp.n} · ${P(tp.price)}`), big,
+                h('div', 'sub', `${Fmt.usdt(tp.gross)} price move − ${Fmt.usdt(tp.fees)} fees`));
+    const right = h('div', 'rr');
+    right.append(h('div', 'lbl', 'Reward : risk'));
+    if (tp.rightSide) {
+      right.append(h('b', tp.rrAfterFees >= FuturesMath.MIN_RR ? 'pos' : 'neg', tp.rrAfterFees.toFixed(2)),
+                   h('div', 'sub', 'after fees'),
+                   h('div', 'sub', `${tp.rrBeforeFees.toFixed(2)} before fees`));
+    } else {
+      right.append(h('b', 'neg', '—'), h('div', 'sub', 'wrong side'));
+    }
+    const row = h('div', 'tp');
+    row.append(left, right);
+    box.append(row);
+  }
+
+  if (res.liquidation <= 0) {
+    setBig('o-liq', 'None');
+    $('o-liq-sub').textContent = 'At 1x a LONG cannot be liquidated (the price would have to reach 0).';
+  } else {
+    setBig('o-liq', P(res.liquidation), null, res.liqBeforeStop ? 'neg' : '');
+    const liqPct = Math.abs(res.liquidation - inp.entry) / inp.entry * 100;
+    $('o-liq-sub').textContent = `Isolated margin · ${Fmt.num(liqPct, 2)}% from entry (your stop: ${Fmt.num(res.stopDistancePct, 2)}%). ` +
+      'An estimate — your exchange may show a slightly different price.';
+  }
+}
+
+function update() {
+  const raw = readRaw();
+  const inp = toInputs(raw);
+  render(FuturesMath.calculate(inp), inp);
+  return raw;
+}
+
+const form = $('form');
+form.addEventListener('input', update);
+form.addEventListener('change', update);
+form.addEventListener('submit', e => e.preventDefault());
+$('summary').addEventListener('click', e => { e.preventDefault(); $('results').scrollIntoView({ behavior: 'smooth', block: 'start' }); });
+for (const k in DEFAULTS) if ($(k).value === '') $(k).value = DEFAULTS[k];
+update();
 </script>
 </body>
 </html>
