@@ -42,9 +42,10 @@ local files. The calculator still works; it just starts empty each time.
    loss at the stop after fees. If TP 1 is on the wrong side of entry, or too close to pay the fees, you get
    a red warning instead of a stop. Ladder only exists for take profits, so it is hidden in this mode.
 3. **Exchange:** pick the exchange (MEXC for now). The **maker** and **taker** fees load for the coin picked under
-   Live price, using MEXC's standard rates: BTC 0.01% / 0.04%, ETH 0% / 0.02%, SOL 0% / 0.01%, from MEXC's contract
-   data fetched 2026-11-14. Change them to your fee level; your edits are remembered for each coin. Maintenance
-   margin rate defaults to 0.5%.
+   Live price: BTC 0.01% / 0.04%, ETH 0% / 0.02%, SOL 0% / 0.02%, from MEXC's contract data, fetched 2026-11-14.
+   **Check your real fee on MEXC.** The API returned different fee numbers on different requests that day, e.g. BTC
+   0.01/0.04 or 0/0.02, so the defaults are the highest seen. Type your own; edits are remembered for each coin.
+   Maintenance margin rate defaults to 0.5%.
 4. **Order:** **Market** — Entry follows the live price by itself (the **ask** for a LONG, the **bid** for a SHORT)
    and can't be typed in; opening fee = taker. If live prices are down, you can type the entry, and an amber note
    says so. **Limit** — you type the entry; opening fee = maker.
@@ -115,6 +116,7 @@ balance, you get the red warning instead of the amber one. The 5% open-risk limi
 | Loss per coin at stop | stop distance + entry fee + exit fee | What 1 coin costs you if the stop is hit, fees included. |
 | **Coins** | risk ÷ loss per coin | So the loss at the stop, fees included, is **exactly** your risk. |
 | Position size (USDT) | coins × entry | |
+| Order (contracts) | coins ÷ contract size, rounded **down** to MEXC's step | MEXC trades whole contracts (BTC 0.0001, ETH 0.01, SOL 0.1). Rounding down keeps the real risk at or below the plan. |
 | Margin | position ÷ leverage | Leverage does **not** change how much you win or lose. It only changes how much money is locked, and how close liquidation is. |
 | Profit at a TP | coins × TP distance − entry fee − exit fee | Shown as if the whole position closes at that TP. |
 | Reward-to-risk | profit at TP ÷ loss at stop | "Before fees" = TP distance ÷ stop distance (what you see on a chart). |
@@ -150,11 +152,11 @@ To make the calculator size exactly this trade, enter **balance 1321.11** and **
 | Position (balance 1321.11, risk 1%) | ≈ 1772 | **1,771.99 USDT** | ✅ |
 | Loss at stop incl. fees = chosen risk | exactly | difference **0.000000000** | ✅ |
 
-The self-test has 158 checks in total: your trade, a LONG trade, every warning,
+The self-test has 175 checks in total: your trade, a LONG trade, every warning,
 number reading (`66783,9`, `66,783.9`, `1,772` = 1772, `0,025` = 0.025, spaces), remembering inputs, reading MEXC messages
 (real samples, plus broken, negative and wrong-coin messages), take profit from a ratio, stop loss from a
 take profit, the amber cautions, being in a trade already (Available, risk already open), and exchange fees
-(Market / Limit entry, TP as limit order). All pass.
+(Market / Limit entry, TP as limit order), and the order in whole contracts. All pass.
 
 Exchange fees (balance 1000, risk 1%, LONG 100 / stop 95 / TP 110, maker 0.01%, taker 0.04%):
 
@@ -162,6 +164,17 @@ Exchange fees (balance 1000, risk 1%, LONG 100 / stop 95 / TP 110, maker 0.01%, 
 |---|---|---|---|
 | Market, TP taker | 1.969279 | 19.5274 | 10.00 |
 | Limit, TP maker | 1.980983 | 19.7682 | 10.00 |
+
+Order in whole MEXC contracts (rounded down; one fee 0.02% unless stated):
+
+| Trade | Before rounding | Order | Actual risk (planned) |
+|---|---|---|---|
+| BTC SHORT 66783.9 / 67255, balance 1321.11, risk 1% | 265.33 contracts | **265** = 0.0265 BTC = 1,769.77 USDT | 13.19 (13.21) |
+| BTC LONG 100 / 95, Market, maker 0.01 / taker 0.04 | 19,692.79 | **19,692** | 9.9996 (10.00) |
+| ETH SHORT 1813 / 1820.16, balance 291.03, risk 2% | 73.80 | **73** = 0.73 ETH | 5.76 (5.82) |
+| SOL LONG 100 / 95, balance 100, risk 0.1% | 0.2 | **0** → red: below MEXC's minimum of 1 | 0 (0.10) |
+
+Calculated TP/stop on MEXC's price step: BTC SHORT 2R TP 65761.5753 → **65761.5** (R:R after fees 2.00015, still ≥ 2).
 
 Cautions (fee 0.02%, MMR 0.5%, default minimums):
 
@@ -224,7 +237,8 @@ Live-price tests, run against the real MEXC feed in Firefox on 2026-11-14, page 
 
 - Liquidation is an **estimate**: real exchanges use maintenance tiers, fees and funding.
   Keep your stop well before it.
-- Exchanges round position size to their minimum step, so the real size can be a tiny bit different.
+- The main results use the exact size; the **Order** box shows the real MEXC order (whole contracts, rounded down)
+  and its actual risk, a little below the plan.
 - Funding fees and slippage are not included.
 - The live price is the **last traded** price. A market order fills at the best bid or ask,
   which can be slightly different.

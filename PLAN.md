@@ -233,6 +233,18 @@ Stage 1 — exchange profile + order type:
 - Log: self-test 158/158; click-through with fixed live prices: ask/bid follow, Limit typing, TP maker, stale →
   typed fallback, live back → locked again, per-coin fee edits, reload.
 
+Stage 2 — order quantity in contracts:
+- MEXC contract details fetched again with curl (2026-11-14 18:01 UTC): contract size BTC 0.0001 / ETH 0.01 / SOL 0.1,
+  minimum 1, step 1, price step BTC 0.1 / ETH 0.01 / SOL 0.01 — the same on every request. Stored in the MEXC profile.
+- Found: the API's **fee** fields vary between requests (BTC 0.01/0.04 or 0/0.02; SOL taker 0.01 or 0.02). Defaults now
+  use the highest seen (SOL taker 0.01 → 0.02); the fee note tells you to check your real fee.
+- `orderQuantity`: contracts = coins ÷ contract size, rounded DOWN to the step; coins, USDT, actual risk after rounding.
+  Order box under Position/Margin; red ORDER_BELOW_MIN below MEXC's minimum. Main results keep the exact size.
+- Calculated TP/stop rounded to the price step in your favour. Fixed on the way: trimming zeros would have turned a
+  step-1 price like 65760 into 6576.
+- Log: self-test 175/175 (265 / 19692 / 73 contracts, actual risk, below-minimum warning + text, price step, R:R ≥ 2).
+  Screen: BTC 261 contracts / 13.17 of 13.21 USDT, ETH 77, SOL 0 + red warning, 2R TP 65741.5.
+
 ## Ideas for later (not built)
 - Split the position across TP1/TP2/TP3 (e.g. 50/30/20%) and show the blended result
 - Round the coin amount to the exchange's step size
