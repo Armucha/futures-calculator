@@ -254,6 +254,14 @@ Stage 3 — sizing mode:
 - Log: self-test 192/192 (your case 1250 / 12.5 / 63.475 / 6.35% + HIGH_RISK text; 5%, empty Available, 100% trim,
   99%, 0%, contracts). Screen: switch, slider, buttons, trim note, back to Risk %, reload.
 
+## Feature 9 — Freeze price, rounded order everywhere, MEXC maintenance margin per coin
+1. **Freeze price** (Market only): ❄ button next to the Market note; Entry stays at the live ask/bid of that moment
+   (also when live prices move or go offline). Unfreezes on tap, or on coin / side / order type change or Clear trade.
+   Shown by an ice-blue Entry box + label "❄ frozen", ice-blue note with price and time, "❄ frozen" in the top bar.
+   Not remembered after a reload (a frozen price would be stale). Disabled when there is no live price.
+   Log: 10-step click-through with fixed prices (freeze, price moves, offline, unfreeze, side, coin, Limit, Clear trade,
+   stale) all as expected; self-test unchanged 192/192 (freeze is screen state, checked in the browser).
+
 ## Ideas for later (not built)
 - Split the position across TP1/TP2/TP3 (e.g. 50/30/20%) and show the blended result
 - Round the coin amount to the exchange's step size

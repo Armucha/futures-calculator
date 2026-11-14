@@ -9,7 +9,7 @@
 <style>
   :root {
     --bg:#0d1117; --card:#161b22; --input:#0f141a; --line:#2a313c; --line2:#3a434f;
-    --text:#e6edf3; --muted:#8b949e; --faint:#5c6672; --accent:#58a6ff; --amber:#d29922; --amber-text:#e3b341;
+    --text:#e6edf3; --muted:#8b949e; --faint:#5c6672; --accent:#58a6ff; --amber:#d29922; --amber-text:#e3b341; --ice:#79c0ff;
     --green:#3fb950; --red:#ff6b6b; --red-bg:rgba(255,107,107,.10);
   }
   * { box-sizing: border-box; }
@@ -86,7 +86,14 @@
   .pct-btns button { height:38px; border:1px solid var(--line2); border-radius:10px; background:transparent; color:var(--muted);
                      font:inherit; font-size:.88rem; font-weight:600; cursor:pointer; }
   .pct-btns button.on { border-color:var(--accent); color:var(--text); background:rgba(88,166,255,.14); }
-  #orderHint { margin:-2px 0 10px; }
+  .order-row { display:flex; align-items:center; gap:10px; margin:-2px 0 10px; }
+  .order-row #orderHint { margin:0; flex:1; }
+  .freeze-btn { flex:none; padding:8px 12px; }
+  .freeze-btn:disabled { opacity:.45; cursor:not-allowed; }
+  .freeze-btn.on { color:#04101f; background:var(--ice); border-color:var(--ice); font-weight:700; }
+  .field input.frozen { color:var(--ice); border:2px solid var(--ice); background:rgba(121,192,255,.08); font-weight:700; }
+  .hint.frozen { color:var(--ice); font-weight:700; }
+  .summary .frozen-tag { color:var(--ice); font-weight:700; }
   #feeLegsHint { margin:4px 0 12px; }
   .check { display:flex; align-items:center; gap:10px; font-size:.92rem; cursor:pointer; }
   .check input { width:20px; height:20px; margin:0; accent-color:var(--accent); }
@@ -270,9 +277,12 @@
           <input type="radio" name="orderType" id="ot-market" value="market" checked><label for="ot-market">Market</label>
           <input type="radio" name="orderType" id="ot-limit" value="limit"><label for="ot-limit">Limit</label>
         </div>
-        <p class="hint" id="orderHint"></p>
+        <div class="order-row">
+          <p class="hint" id="orderHint"></p>
+          <button type="button" class="btn freeze-btn" id="freezeBtn" hidden>❄ Freeze price</button>
+        </div>
         <div class="row cols-2">
-          <label class="field"><span>Entry price</span>
+          <label class="field"><span id="entryLbl">Entry price</span>
             <input id="entry" type="text" inputmode="decimal" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="next"></label>
           <label class="field"><span>Stop loss</span>
             <input id="stop" type="text" inputmode="decimal" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="next"></label>
@@ -1349,6 +1359,7 @@ function renderSummary(res) {
   } else {
     s.append(h('span', null, 'Results appear below as you type'));
   }
+  if (frozen && orderType() === 'market') s.append(h('span', 'frozen-tag', '❄ frozen'));
   const n = res.warnings.length, c = (res.cautions || []).length;
   if (n || c) {
     const counts = h('span', 'counts');
@@ -1627,23 +1638,42 @@ function onTpModeChange() {
 
 // Market order: Entry follows the live ask (LONG) or bid (SHORT) and can't be typed in.
 // Limit order, or no live price: you type Entry. Returns the note under the Market | Limit buttons.
+//
+// Freeze price (Market only): Entry stays at the live price of the moment you tapped, until you tap again
+// or change coin, side or order type (or Clear trade). Not remembered after a reload — it would be stale.
 let marketWasLive = false;
+let frozen = null;   // { price, quote: 'ask' | 'bid', at }
 function syncMarketEntry() {
-  const market = orderType() === 'market', entry = $('entry');
+  const market = orderType() === 'market', entry = $('entry'), btn = $('freezeBtn');
   $('useLive').hidden = market;                         // Market fills Entry by itself
+  btn.hidden = !market;
+  entry.classList.remove('auto', 'frozen');
+  $('entryLbl').textContent = 'Entry price';
+  btn.textContent = '❄ Freeze price'; btn.classList.remove('on');
   marketWasLive = false;
   if (!market) {
-    entry.readOnly = false; entry.classList.remove('auto');
+    frozen = null;
+    entry.readOnly = false;
     return { note: 'Limit order: type your entry price. Opening fee = maker.' };
   }
   const side = document.querySelector('input[name="side"]:checked').value;
+  if (frozen) {
+    entry.value = String(frozen.price);
+    entry.readOnly = true; entry.classList.add('frozen');
+    $('entryLbl').textContent = 'Entry price · ❄ frozen';
+    btn.textContent = 'Unfreeze'; btn.classList.add('on'); btn.disabled = false;
+    return { frozen: true, note: `❄ Frozen at ${Fmt.num(frozen.price, Fmt.decimalsOf(frozen.price))} (the ${frozen.quote} at ` +
+                                 `${new Date(frozen.at).toTimeString().slice(0, 8)}). Tap Unfreeze to follow the live price again.` };
+  }
   if (liveIsFresh()) {
     entry.value = String(marketPrice(side, live));
     entry.readOnly = true; entry.classList.add('auto');
     marketWasLive = true;
+    btn.disabled = false;
     return { note: `Market order: Entry follows the live ${side === 'short' ? 'bid' : 'ask'} for ${currentCoin()}. Opening fee = taker.` };
   }
-  entry.readOnly = false; entry.classList.remove('auto');
+  btn.disabled = true;                                  // nothing live to freeze
+  entry.readOnly = false;
   const waiting = live.state === 'connecting' || live.state === 'connected';
   return { warn: true, note: (waiting ? 'Waiting for the live price — until it arrives, ' : 'Live price unavailable — ') +
                              'the Market order uses the entry you type. Opening fee = taker.' };
@@ -1663,6 +1693,7 @@ function update() {
   const market = syncMarketEntry();
   $('orderHint').textContent = market.note;
   $('orderHint').classList.toggle('caution', Boolean(market.warn));
+  $('orderHint').classList.toggle('frozen', Boolean(market.frozen));
   $('feeHint').textContent = feeSourceText();
   $('feeLegsHint').textContent = feeLegsText();
   const auto = applyAuto();
@@ -1687,9 +1718,13 @@ function onFormEdit(e) {
   if (t && t.name === 'tpMode') onTpModeChange();
   else if (t && calculatedIds().includes(t.id)) setTpMode('manual');   // you typed in a calculated box: keep your number
   if (t && (t.id === 'makerPct' || t.id === 'takerPct')) rememberCoinFees();
-  if (t && (t.name === 'symbol' || t.id === 'exchange')) {
-    loadCoinFees();                                                     // the new coin's fees
-    if (orderType() === 'market' && $('entry').classList.contains('auto')) $('entry').value = '';  // old coin's price
+  if (t && (t.name === 'symbol' || t.name === 'side' || t.name === 'orderType' || t.id === 'exchange')) {
+    const wasLive = $('entry').classList.contains('auto') || $('entry').classList.contains('frozen');
+    frozen = null;                                                      // a frozen price belongs to one coin and side
+    if (t.name === 'symbol' || t.id === 'exchange') {
+      loadCoinFees();                                                   // the new coin's fees
+      if (orderType() === 'market' && wasLive) $('entry').value = '';   // that was the old coin's price
+    }
   }
   update();
 }
@@ -1703,7 +1738,16 @@ document.querySelectorAll('.pct-btns button').forEach(b => b.addEventListener('c
   $('availPct').value = b.dataset.pct;
   $('availPct').dispatchEvent(new Event('input', { bubbles: true }));
 }));
+$('freezeBtn').addEventListener('click', () => {         // ❄ Freeze price / Unfreeze
+  if (frozen) frozen = null;
+  else if (orderType() === 'market' && liveIsFresh()) {
+    const side = document.querySelector('input[name="side"]:checked').value;
+    frozen = { price: marketPrice(side, live), quote: side === 'short' ? 'bid' : 'ask', at: Date.now() };
+  }
+  update();
+});
 $('clearTrade').addEventListener('click', () => {
+  frozen = null;
   for (const k of ['entry', 'stop', 'tp1', 'tp2', 'tp3']) $(k).value = '';
   update();
   $('entry').focus();
@@ -1856,12 +1900,12 @@ function onLivePrice(symbol, quote) {      // quote = { price, bid, ask }
   live.priceSymbol = symbol; live.at = Date.now(); live.error = '';
   live.decimals[symbol] = Math.max(live.decimals[symbol] || 0, ...[quote.price, quote.bid, quote.ask].filter(v => v > 0).map(Fmt.decimalsOf));
   renderLive();
-  if (orderType() === 'market') update();  // a Market order's entry follows the price
+  if (orderType() === 'market' && !frozen) update();  // a Market order's entry follows the price (unless frozen)
 }
 // Every second (and on status changes): redraw, and refresh a Market order when its live price comes or goes.
 function liveTick() {
   renderLive();
-  if (orderType() === 'market' && liveIsFresh() !== marketWasLive) update();
+  if (orderType() === 'market' && !frozen && liveIsFresh() !== marketWasLive) update();
 }
 function onLiveStatus(state, detail) { live.state = state; live.detail = detail; liveTick(); }
 function onLiveError(text) { live.error = 'MEXC says: ' + text; renderLive(); }

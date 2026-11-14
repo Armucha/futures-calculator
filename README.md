@@ -53,6 +53,9 @@ local files. The calculator still works; it just starts empty each time.
 4. **Order:** **Market** — Entry follows the live price by itself (the **ask** for a LONG, the **bid** for a SHORT)
    and can't be typed in; opening fee = taker. If live prices are down, you can type the entry, and an amber note
    says so. **Limit** — you type the entry; opening fee = maker.
+   **❄ Freeze price** (Market): holds Entry at the live price of that moment so the numbers stop moving. Tap
+   **Unfreeze**, or change coin, side or order type (or Clear trade) to follow the live price again. While frozen,
+   Entry has a bold ice-blue border, its label says "❄ frozen", and the top bar shows "❄ frozen".
    A stop always closes with the taker fee. A take profit closes with the taker fee, or the maker fee if you tick
    **TP as limit order**. The line "Fees used" under the TP boxes shows which fee goes where.
    Check your exchange's fee page and fee level. Taker fees on many big exchanges are higher than 0.02%.
