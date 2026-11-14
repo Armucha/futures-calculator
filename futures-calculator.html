@@ -817,11 +817,11 @@ function runSelfTest() {
   near('Liquidation price (approximate)', a.liquidation, 75944.7335, 0.001);
   is('Liquidation before stop?', a.liqBeforeStop, false);
 
-  section('B. Same trade sized from risk — balance 1321.11 USDT, risk 1%');
-  const b = M.calculate({ side: 'short', balance: 1321.11, riskPct: 1, entry: 66783.9, stop: 67255,
+  section('B. Same trade sized from risk — balance 1000 USDT, risk 1%');
+  const b = M.calculate({ side: 'short', balance: 1000, riskPct: 1, entry: 66783.9, stop: 67255,
                           tps: [65800, null, null], leverage: 7, feePct: 0.02, mmrPct: 0.5 });
-  near('Risk amount (USDT)', b.riskAmount, 13.2111, 1e-9);
-  near('Position size ≈ 1772 USDT', b.positionUsdt, 1772, 0.05);
+  near('Risk amount (USDT)', b.riskAmount, 10, 1e-9);
+  near('Position size (USDT)', b.positionUsdt, 1341.29055, 1e-5);
   near('Loss at stop incl. both fees = chosen risk (difference)', b.loss.total - b.riskAmount, 0, 1e-9);
   is('Warnings', codes(b), 'none');
 
@@ -877,7 +877,7 @@ function runSelfTest() {
   section('F. Remembering your inputs (your own saved inputs are put back afterwards)');
   let before = null;
   try { before = localStorage.getItem(STORE_KEY); } catch (e) { /* storage blocked */ }
-  const sample = { side: 'short', balance: '1321.11', riskPct: '1', leverage: '7', entry: '66783.9', stop: '67255',
+  const sample = { side: 'short', balance: '1000', riskPct: '1', leverage: '7', entry: '66783.9', stop: '67255',
                    tp1: '65800', tp2: '', tp3: '', feePct: '0.02', mmrPct: '0.5' };
   saveInputs(sample);
   is('This browser stores and reads back the inputs', JSON.stringify(loadInputs()) === JSON.stringify(sample), true);
@@ -918,7 +918,7 @@ function runSelfTest() {
   const box15 = tpText(tpR('short', 66783.9, 67255, 0.0002, 1.5), 'short', 66783.9, 67255);
   is('Box shows SHORT 1.5R TP rounded down (in your favour)', box15, '66010.47');
   is('Box shows LONG 2R TP rounded up (in your favour)', tpText(tl, 'long', 100, 95), '110.61');
-  is('1.5R TP as shown in the box → no "below 1.5" warning', codes(M.calculate({ side: 'short', balance: 1321.11,
+  is('1.5R TP as shown in the box → no "below 1.5" warning', codes(M.calculate({ side: 'short', balance: 1000,
      riskPct: 1, entry: 66783.9, stop: 67255, tps: [M.parseNumber(box15), null, null], leverage: 7, feePct: 0.02, mmrPct: 0.5 })), 'none');
   is('Stop on the wrong side → no TP', Number.isNaN(tpR('long', 100, 105, 0.001, 2)), true);
   is('SHORT ratio too big (TP at or below 0) is detected', tpR('short', 100, 150, 0, 3) <= 0, true);
@@ -944,14 +944,14 @@ function runSelfTest() {
   const box2 = stopText(sR('short', 1830, 1667.8, 0.0002, 2).stop, 'short', 1830, 1667.8);
   is('Box shows SHORT stop rounded towards entry (in your favour)', box2, '1910');
   const stopBox15 = M.parseNumber(stopText(sR('short', 66783.9, 65800, 0.0002, 1.5).stop, 'short', 66783.9, 65800));
-  is('1.5R stop as shown in the box → no "below 1.5" warning', codes(M.calculate({ side: 'short', balance: 1321.11,
+  is('1.5R stop as shown in the box → no "below 1.5" warning', codes(M.calculate({ side: 'short', balance: 1000,
      riskPct: 1, entry: 66783.9, stop: stopBox15, tps: [65800, null, null], leverage: 7, feePct: 0.02, mmrPct: 0.5 })), 'none');
 
   section('J. Cautions — amber advice, not errors (fee 0.02%, MMR 0.5%, default minimums)');
   const yes = (res, code) => (res.cautions.some(c => c.code === code) ? 'yes' : 'no');
   const cz = res => res.cautions.map(c => c.code).join(',') || 'none';
   const ctext = (res, code) => warningText(res.cautions.find(c => c.code === code), null);
-  const ethTrade = { coin: 'ETH_USDT', side: 'short', balance: 291.03, riskPct: 2, leverage: 7, entry: 1813, stop: 1820.16,
+  const ethTrade = { coin: 'ETH_USDT', side: 'short', balance: 500, riskPct: 2, leverage: 7, entry: 1813, stop: 1820.16,
                      tps: [1796.5, null, null], feePct: 0.02, mmrPct: 0.5 };
   const j1 = M.calculate(ethTrade);
   is('ETH SHORT 1813 / stop 1820.16 → TIGHT_STOP (0.39% < 0.40%)', yes(j1, 'TIGHT_STOP'), 'yes');
@@ -986,34 +986,34 @@ function runSelfTest() {
   is('2x trade that uses 96% of the balance → amber margin caution', cz(calc({ balance: 100, riskPct: 2, stop: 99,
      tps: [103, null, null], leverage: 2, feePct: 0.02 })), 'HIGH_MARGIN');
 
-  section('K. Already in a trade — Available and Risk already open (ETH SHORT 1813 / 1820.16, TP 1796.5, risk 2%)');
+  section('K. Already in a trade — Available and Risk already open (ETH SHORT 1813 / 1820.16, TP 1796.5, balance 500, risk 2%)');
   const inTrade = changes => M.calculate(Object.assign({}, ethTrade, changes));
   const k1 = inTrade({ available: null });
-  is('Balance 291.03, Available empty, 7x → margin fits, no balance warning', codes(k1), 'none');
+  is('Balance 500, Available empty, 7x → margin fits, no balance warning', codes(k1), 'none');
   is('   margin checked against the balance', k1.marginBase, 'balance');
-  const k2 = inTrade({ available: 150 });
-  is('Balance 291.03, Available 150, 7x → NOT_ENOUGH_BALANCE', codes(k2), 'NOT_ENOUGH_BALANCE');
-  is('   minimum leverage', k2.minLeverage, 9);
-  near('   risk still 2% of the whole balance (USDT)', k2.riskAmount, 5.8206, 1e-9);
+  const k2 = inTrade({ available: 250 });
+  is('Balance 500, Available 250, 7x → NOT_ENOUGH_BALANCE', codes(k2), 'NOT_ENOUGH_BALANCE');
+  is('   minimum leverage', k2.minLeverage, 10);
+  near('   risk still 2% of the whole balance (USDT)', k2.riskAmount, 10, 1e-9);
   is('   warning text names the available balance', warningText(k2.warnings[0], null),
-     'Margin 191.15 USDT (+ 0.27 opening fee) is more than your available balance (150.00 USDT). Use at least 9x leverage.');
-  const k3 = inTrade({ available: 150, leverage: 9 });
-  is('Balance 291.03, Available 150, 9x → fits', codes(k3), 'none');
-  near('   margin as % of available', k3.marginSharePct, 99.1152, 0.001);
-  is('Balance 291.03, Available 400 → red warning: available > balance', codes(inTrade({ available: 400 })), 'AVAILABLE_ABOVE_BALANCE');
+     'Margin 328.40 USDT (+ 0.46 opening fee) is more than your available balance (250.00 USDT). Use at least 10x leverage.');
+  const k3 = inTrade({ available: 250, leverage: 10 });
+  is('Balance 500, Available 250, 10x → fits', codes(k3), 'none');
+  near('   margin as % of available', k3.marginSharePct, 91.9531, 0.001);
+  is('Balance 500, Available 600 → red warning: available > balance', codes(inTrade({ available: 600 })), 'AVAILABLE_ABOVE_BALANCE');
   is('Available that is not a number (-5) → box marked invalid', inTrade({ available: NaN }).invalid.join(','), 'available');
-  const k5 = inTrade({ openRisk: 5.82 });
-  near('Open risk 5.82 → total open risk (USDT)', k5.totalOpenRisk, 11.6406, 1e-9);
-  near('   as % of balance (≈ 4.0%)', k5.totalOpenRiskPct, 3.9998, 0.0001);
+  const k5 = inTrade({ openRisk: 10 });
+  near('Open risk 10 → total open risk (USDT)', k5.totalOpenRisk, 20, 1e-9);
+  near('   as % of balance (4.0%)', k5.totalOpenRiskPct, 4, 1e-9);
   is('   → no caution', yes(k5, 'OPEN_RISK_HIGH'), 'no');
-  const k6 = inTrade({ openRisk: 10 });
-  near('Open risk 10 → total open risk (USDT)', k6.totalOpenRisk, 15.8206, 1e-9);
-  near('   as % of balance (≈ 5.44%)', k6.totalOpenRiskPct, 5.4361, 0.0001);
+  const k6 = inTrade({ openRisk: 20 });
+  near('Open risk 20 → total open risk (USDT)', k6.totalOpenRisk, 30, 1e-9);
+  near('   as % of balance (6.0%)', k6.totalOpenRiskPct, 6, 1e-9);
   is('   → caution', yes(k6, 'OPEN_RISK_HIGH'), 'yes');
   is('   caution text', ctext(k6, 'OPEN_RISK_HIGH'),
-     'All your trades together risk 15.82 USDT (5.44% of your balance) if every stop is hit — more than 5%.');
-  is('Your own limit 6% → no caution', yes(inTrade({ openRisk: 10, maxOpenRiskPct: 6 }), 'OPEN_RISK_HIGH'), 'no');
-  is('Limit 0 turns the open-risk caution off', yes(inTrade({ openRisk: 10, maxOpenRiskPct: 0 }), 'OPEN_RISK_HIGH'), 'no');
+     'All your trades together risk 30.00 USDT (6.00% of your balance) if every stop is hit — more than 5%.');
+  is('Your own limit 7% → no caution', yes(inTrade({ openRisk: 20, maxOpenRiskPct: 7 }), 'OPEN_RISK_HIGH'), 'no');
+  is('Limit 0 turns the open-risk caution off', yes(inTrade({ openRisk: 20, maxOpenRiskPct: 0 }), 'OPEN_RISK_HIGH'), 'no');
   is('Open risk empty → no total shown', inTrade({}).totalOpenRisk, null);
 
   section('L. Exchange fees: Market / Limit entry, TP as limit (LONG 100 / stop 95 / TP 110, maker 0.01%, taker 0.04%)');
@@ -1058,36 +1058,36 @@ function runSelfTest() {
 
   section('M. Order in whole contracts (MEXC contract details, fetched 2026-11-14)');
   const mexc = c => contractFor('MEXC', c);
-  const m1 = M.calculate({ side: 'short', balance: 1321.11, riskPct: 1, entry: 66783.9, stop: 67255, tps: [65800, null, null],
+  const m1 = M.calculate({ side: 'short', balance: 1000, riskPct: 1, entry: 66783.9, stop: 67255, tps: [65800, null, null],
                            leverage: 7, feePct: 0.02, mmrPct: 0.5, contract: mexc('BTC_USDT') });
   const o1 = m1.order;
-  near('BTC real trade: contracts before rounding', o1.exactContracts, 265.332267, 1e-5);
-  is('   rounded DOWN to whole contracts', o1.contracts, 265);
-  near('   = coins (BTC)', o1.coins, 0.0265, 1e-12);
-  near('   = USDT', o1.usdt, 1769.77335, 1e-4);
-  near('   actual risk after rounding (planned 13.21)', o1.actualRisk, 13.194556, 1e-5);
+  near('BTC trade, balance 1000, risk 1%: contracts before rounding', o1.exactContracts, 200.840405, 1e-5);
+  is('   rounded DOWN to whole contracts', o1.contracts, 200);
+  near('   = coins (BTC)', o1.coins, 0.02, 1e-12);
+  near('   = USDT', o1.usdt, 1335.678, 1e-4);
+  near('   actual risk after rounding (planned 10.00)', o1.actualRisk, 9.9581556, 1e-6);
   const o2 = M.calculate(Object.assign({}, feeTrade, { orderType: 'market', tpLimit: false, contract: mexc('BTC_USDT') })).order;
   is('BTC LONG 100 / 95, Market → contracts (19692.79 rounded down)', o2.contracts, 19692);
   near('   actual risk (planned 10.00)', o2.actualRisk, 9.999598, 1e-5);
   const o3 = M.calculate(Object.assign({}, ethTrade, { contract: mexc('ETH_USDT') })).order;
-  is('ETH SHORT 1813 / 1820.16 → contracts (73.80 rounded down)', o3.contracts, 73);
-  near('   actual risk (planned 5.82)', o3.actualRisk, 5.757241, 1e-5);
+  is('ETH SHORT 1813 / 1820.16, balance 500 → contracts (126.80 rounded down)', o3.contracts, 126);
+  near('   actual risk (planned 10.00)', o3.actualRisk, 9.93715632, 1e-7);
   const o4 = M.calculate({ side: 'long', balance: 100, riskPct: 0.1, entry: 100, stop: 95, tps: [110, null, null], leverage: 5,
                            feePct: 0, mmrPct: 0.5, contract: mexc('SOL_USDT') });
   is('SOL order too small (0.2 contracts → 0) → red warning', codes(o4), 'ORDER_BELOW_MIN');
   is('   warning text', warningText(o4.warnings[0], null),
      "The order rounds down to 0 contracts — below MEXC's minimum of 1 (0.1 SOL ≈ 10.00 USDT). Use a closer stop or a bigger risk, or skip this trade.");
   is('No contract details → no order box (as before)', M.calculate(ethTrade).order, null);
-  near('ALL results use the 265 contracts: position (USDT)', m1.positionUsdt, 1769.77335, 1e-6);
-  near('   margin at 7x', m1.margin, 252.824764, 1e-6);
-  near('   loss at stop = actual risk', m1.loss.total, 13.19455617, 1e-8);
-  near('   net profit at TP', m1.takeProfits[0].net, 25.37065533, 1e-8);
+  near('ALL results use the 200 contracts: position (USDT)', m1.positionUsdt, 1335.678, 1e-6);
+  near('   margin at 7x', m1.margin, 190.811143, 1e-6);
+  near('   loss at stop = actual risk', m1.loss.total, 9.9581556, 1e-8);
+  near('   net profit at TP', m1.takeProfits[0].net, 19.1476644, 1e-8);
   near('   R:R after fees (the same as before rounding)', m1.takeProfits[0].rrAfterFees, 1.92281233, 1e-8);
-  near('   planned (unrounded) position, for the note', m1.planned.positionUsdt, 1771.992358, 1e-5);
-  near('   planned risk, for the note', m1.planned.riskAmount, 13.2111, 1e-9);
+  near('   planned (unrounded) position, for the note', m1.planned.positionUsdt, 1341.29055, 1e-5);
+  near('   planned risk, for the note', m1.planned.riskAmount, 10, 1e-9);
   const m3 = M.calculate(Object.assign({}, ethTrade, { contract: mexc('ETH_USDT'), openRisk: 10 }));
-  near('ETH 73 contracts + 10 already open → total open risk uses the real order', m3.totalOpenRisk, 15.75724136, 1e-8);
-  near('   margin as % of balance uses the real order', m3.marginSharePct, 64.9658, 0.0001);
+  near('ETH 126 contracts + 10 already open → total open risk uses the real order', m3.totalOpenRisk, 19.93715632, 1e-8);
+  near('   margin as % of balance uses the real order', m3.marginSharePct, 65.268, 0.0001);
   is('SOL order of 0 contracts → position 0, loss 0, R:R still 2.00',
      `${o4.positionUsdt} / ${o4.loss.total} / ${o4.takeProfits[0].rrAfterFees.toFixed(2)}`, '0 / 0 / 2.00');
   is('Price step: BTC SHORT 2R TP rounded DOWN to 0.1', tpText(M.takeProfitForR('short', 66783.9, 67255, 0.0002, 2), 'short', 66783.9, 67255, 0.1), '65761.5');

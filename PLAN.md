@@ -275,6 +275,14 @@ Stage 3 — sizing mode:
    remembered per coin; 0.5% fallback for coins without data). Your SHORT at 7x: liquidation ≈ 76,248.21 (was 75,944.73).
    Log: self-test 205/205; browser: per-coin box values, SOL edit remembered, survives reload.
 
+## Housekeeping — round example balances (2026-11-14)
+Test and README balances that looked like real account balances (291.03, and 1321.11 which only existed to reproduce
+the 1,772 USDT position) replaced with round numbers: BTC examples balance 1000, ETH examples balance 500; the
+"already in a trade" cases use Available 250 / 600 and open risk 10 / 20. All expected values recalculated in Python
+(e.g. BTC 1000 @ 1% → 1,341.29 USDT, 200 contracts; ETH 500 @ 2% → 126 contracts; Available 250 → minimum 10x).
+The ETH caution results don't depend on the balance and stayed the same. 665.48 / 675.48 were never in the repo.
+Self-test 205/205.
+
 ## Ideas for later (not built)
 - Split the position across TP1/TP2/TP3 (e.g. 50/30/20%) and show the blended result
 - Round the coin amount to the exchange's step size

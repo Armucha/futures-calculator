@@ -150,7 +150,8 @@ SHORT, entry 66,783.9, stop 67,255, TP 65,800, leverage 7, fee 0.02%, position 1
 8. Breakeven: 66,783.9 × 0.9998 ÷ 1.0002 = **66,757.19**
 9. Liquidation: 66,783.9 × (1 + 1/7) ÷ 1.005 ≈ **75,944.73**, far above the stop, so no warning
 
-To make the calculator size exactly this trade, enter **balance 1321.11** and **risk 1%** (= 13.21 USDT).
+Sized from your account instead: with **balance 1000** and **risk 1%** (= 10 USDT) the calculator sizes this trade to
+**1,341.29 USDT**. Your 1,772 USDT position corresponds to a risk of 13.21 USDT.
 
 ## Test results
 
@@ -159,7 +160,7 @@ To make the calculator size exactly this trade, enter **balance 1321.11** and **
 | Loss at stop, price move | ≈ 12.5 + fees | 12.50 + 0.71 fees = **13.21** | ✅ |
 | Profit at TP, price move | ≈ 26 − fees | 26.11 − 0.70 fees = **25.40** | ✅ |
 | Reward-to-risk | ≈ 2.1 | **2.09** before fees · **1.92** after fees | ✅ |
-| Position (balance 1321.11, risk 1%) | ≈ 1772 | **1,771.99 USDT** | ✅ |
+| Position sized from balance 1000, risk 1% | — | **1,341.29 USDT** (loss at stop exactly 10.00) | ✅ |
 | Loss at stop incl. fees = chosen risk | exactly | difference **0.000000000** | ✅ |
 
 The self-test has 205 checks in total: your trade, a LONG trade, every warning,
@@ -179,9 +180,9 @@ Order in whole MEXC contracts (rounded down; one fee 0.02% unless stated):
 
 | Trade | Before rounding | Order | Actual risk (planned) |
 |---|---|---|---|
-| BTC SHORT 66783.9 / 67255, balance 1321.11, risk 1% | 265.33 contracts | **265** = 0.0265 BTC = 1,769.77 USDT | 13.19 (13.21) |
+| BTC SHORT 66783.9 / 67255, balance 1000, risk 1% | 200.84 contracts | **200** = 0.02 BTC = 1,335.68 USDT | 9.96 (10.00) |
 | BTC LONG 100 / 95, Market, maker 0.01 / taker 0.04 | 19,692.79 | **19,692** | 9.9996 (10.00) |
-| ETH SHORT 1813 / 1820.16, balance 291.03, risk 2% | 73.80 | **73** = 0.73 ETH | 5.76 (5.82) |
+| ETH SHORT 1813 / 1820.16, balance 500, risk 2% | 126.80 | **126** = 1.26 ETH | 9.94 (10.00) |
 | SOL LONG 100 / 95, balance 100, risk 0.1% | 0.2 | **0** → red: below MEXC's minimum of 1 | 0 (0.10) |
 
 Calculated TP/stop on MEXC's price step: BTC SHORT 2R TP 65761.5753 → **65761.5** (R:R after fees 2.00015, still ≥ 2).
@@ -199,20 +200,20 @@ Cautions (fee 0.02%, MMR 0.5%, default minimums):
 
 | Trade | Tight stop | High fees | High margin |
 |---|---|---|---|
-| ETH SHORT, balance 291.03, risk 2%, 7x, 1813 / stop 1820.16 | yes (0.39% < 0.40%) | no (9.2%) | yes (65.7%) |
+| ETH SHORT, balance 500, risk 2%, 7x, 1813 / stop 1820.16 | yes (0.39% < 0.40%) | no (9.2%) | yes (65.7%) |
 | BTC LONG, balance 1000, risk 1%, 10x, 1000 / stop 998 | yes (0.20% < 0.30%) | yes (16.7%) | no (41.7%) |
 | BTC LONG, balance 1000, risk 1%, 5x, 1000 / stop 980 | no | no | no |
 
-Already in a trade (ETH SHORT 1813 / stop 1820.16 / TP 1796.5, risk 2%, balance 291.03):
+Already in a trade (ETH SHORT 1813 / stop 1820.16 / TP 1796.5, risk 2%, balance 500):
 
 | Case | Result |
 |---|---|
-| Available empty, 7x | margin 191.15 fits, no warning |
-| Available 150, 7x | red: not enough available, minimum leverage **9x** |
-| Available 150, 9x | fits (margin 148.67 = 99.1% of available → amber margin caution) |
-| Available 400 | red: Available is more than Balance |
-| Risk already open 5.82 | total open risk 11.64 USDT = 4.00%, no caution |
-| Risk already open 10 | total open risk 15.82 USDT = 5.44%, amber caution |
+| Available empty, 7x | margin 328.40 fits, no warning |
+| Available 250, 7x | red: not enough available, minimum leverage **10x** |
+| Available 250, 10x | fits (margin 229.88 = 92.0% of available → amber margin caution) |
+| Available 600 | red: Available is more than Balance |
+| Risk already open 10 | total open risk 20.00 USDT = 4.00%, no caution |
+| Risk already open 20 | total open risk 30.00 USDT = 6.00%, amber caution |
 
 Take profit from a ratio (fee 0.02% unless stated). R:R after fees comes out exactly as chosen in every case:
 
