@@ -95,6 +95,25 @@ Sources: MEXC futures WebSocket docs for the
 [ping](https://www.mexc.com/api-docs/futures/websocket-api/command-details-for-data-exchange) and the
 [ticker](https://www.mexc.com/api-docs/futures/websocket-api/get-a-single-ticker).
 
+## Custom coins
+
+Next to BTC_USDT / ETH_USDT / SOL_USDT, tap **+ Custom** to add your own MEXC pair (up to 10, saved in this browser).
+The form asks for: name (MEXC symbol like XYZ_USDT, uppercased for you), contract size (coins per contract), minimum
+volume and volume step (contracts), price step, maker / taker fee %, maintenance margin %, minimum stop distance %
+(for the tight-stop caution; 1.0% is only a rough guess) and an optional maximum leverage. Find these numbers in
+MEXC's contract details for the pair, or ask Claude Code to fetch them with curl. No real coin's numbers are built in
+beyond the three defaults.
+
+- A wrong field gets a red message right under it (letters, digits and _ only; a name can't repeat a built-in or
+  saved coin; sizes and steps above 0; fees 0–10; maintenance margin 0–100; min stop above 0; max leverage empty or ≥ 1).
+- A selected custom coin works like a built-in one: whole-contract order, minimum order check, fees, maintenance margin
+  for liquidation, tight-stop caution, Freeze price. Results name it ("99 contracts = 990 XYZ", "Order on MEXC (XYZ_USDT)").
+- Leverage above the coin's maximum → red: "Leverage 20x is above this coin's maximum of 10x on MEXC."
+- Live price: a MEXC-style name is tried on the live feed. If MEXC answers with an error or nothing arrives within 10 s:
+  "No live price for XYZ_USDT, type prices by hand" — everything else keeps working.
+- **Edit** / **Delete** appear under the coin buttons when a custom coin is selected; deleting asks first, in the page.
+  Deleting the selected coin switches back to BTC_USDT.
+
 ## Red warnings and amber cautions
 
 **Red** = a real problem: stop on the wrong side, liquidation before the stop, margin bigger than your balance
@@ -176,12 +195,24 @@ Sized from your account instead: with **balance 1000** and **risk 1%** (= 10 USD
 | Position sized from balance 1000, risk 1% | — | **1,341.29 USDT** (loss at stop exactly 10.00) | ✅ |
 | Loss at stop incl. fees = chosen risk | exactly | difference **0.000000000** | ✅ |
 
-The self-test has 222 checks in total: your trade, a LONG trade, every warning,
+The self-test has 253 checks in total: your trade, a LONG trade, every warning,
 number reading (`66783,9`, `66,783.9`, `1,772` = 1772, `0,025` = 0.025, spaces), remembering inputs, reading MEXC messages
 (real samples, plus broken, negative and wrong-coin messages), take profit from a ratio, stop loss from a
 take profit, the amber cautions, being in a trade already (Available, risk already open), and exchange fees
 (Market / Limit entry, TP as limit order), the order in whole contracts, sizing by % of available, and the suggested
-fix for too much total open risk. All pass.
+fix for too much total open risk, and custom coins. All pass.
+
+Custom coins (generic coin, balance 1000, risk 1%, LONG 0.2 / stop 0.19, 10x, Market, maker 0, taker 0.02%, MMR 0.1%):
+
+| Coin | Order | Position | Loss at stop |
+|---|---|---|---|
+| A: size 10, min 1, step 1 | **99** contracts = 990 coins | 198.00 USDT (margin 19.80) | 9.977 USDT (0.998%) |
+| B: size 10, step 5 | **95** contracts = 950 coins | 190.00 USDT | 9.574 USDT |
+| C: size 1000 | 0.99 → **0**: red "below minimum", no order | 0 | 0 |
+
+Also checked: max leverage 5 with 10x → red warning; min stop 1.0% with a 0.5% stop → tight-stop caution; name
+"btc_usdt" (exists), "my coin" (space) and contract size 0 are rejected; an 11th coin is rejected; two coins saved and
+read back are the same, deleting one leaves the other; broken saved data is skipped. All BTC / ETH / SOL tests unchanged.
 
 Suggested fix (balance 1000, cap 5% → limit 50):
 

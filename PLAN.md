@@ -293,6 +293,20 @@ Self-test 205/205.
 - Log: self-test 222/222 (+17: your 4 cases, texts, round trip, slider check at 19% = 48.24). Browser: updates live
   while typing open risk / risk / slider; caution disappears at the suggested values.
 
+## Feature 11 — Custom coins (2026-11-14)
+- "+ Custom" next to the coin buttons opens an in-page form (name, contract size, min volume, volume step, price step,
+  maker/taker %, maintenance margin %, min stop distance % default 1.0 "rough guess", optional max leverage) with a
+  message under each wrong field. Saved in localStorage (own key, try/catch, broken entries skipped), max 10.
+- `coinProfile()` / `contractFor()` look in the built-in profile first, then custom coins — so contracts, minimum,
+  fees, MMR, tight stop (coin's own minimum), price step, Freeze all work. Built-in numbers untouched.
+- New red LEVERAGE_ABOVE_MAX (custom coins only). Results say "Order on MEXC (XYZ_USDT)" (for every coin).
+- Live feed now accepts any MEXC-style name (`isSymbol`); others are never sent. MEXC error or 10 s without a price →
+  "No live price for XYZ_USDT, type prices by hand". Coin button changes handled by one listener on the button row.
+- Edit / Delete bar under the buttons; delete asks in the page; deleting the selected coin → BTC_USDT.
+- Log: self-test 253/253 (+31, all earlier tests unchanged). Browser against the real feed: validation messages,
+  save → selected with its fees, 99 contracts = 990 XYZ, leverage warning, MEXC "Contract [XYZ_USDT] not exists"
+  shown as the no-live-price note, edit, non-MEXC name "ABC", delete with confirm → BTC, reload keeps the coins.
+
 ## Ideas for later (not built)
 - Split the position across TP1/TP2/TP3 (e.g. 50/30/20%) and show the blended result
 - Round the coin amount to the exchange's step size

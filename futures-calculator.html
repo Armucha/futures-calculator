@@ -66,6 +66,22 @@
                  font-weight:600; font-size:.88rem; cursor:pointer; user-select:none; -webkit-tap-highlight-color:transparent; }
   .chips input:checked + label { border-color:var(--accent); color:var(--text); background:rgba(88,166,255,.14); }
   .chips input:focus-visible + label { outline:3px solid var(--accent); outline-offset:2px; }
+  /* custom coins */
+  .chips label.custom-coin { padding:0 4px; text-align:center; line-height:1.1; overflow-wrap:anywhere; }
+  .chip-add { height:42px; border:1px dashed var(--line2); border-radius:10px; background:transparent; color:var(--muted);
+              font:inherit; font-size:.88rem; font-weight:600; cursor:pointer; }
+  .chip-add:disabled { opacity:.45; cursor:not-allowed; }
+  .coin-bar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:10px; font-size:.85rem; color:var(--muted); }
+  .coin-bar > span { flex:1; min-width:150px; }
+  .btn.small { padding:6px 10px; font-size:.82rem; }
+  .btn.danger { color:#1f0606; background:var(--red); border-color:var(--red); font-weight:700; }
+  .coin-form { margin-top:12px; padding:12px; border:1px solid var(--line2); border-radius:12px; background:var(--input); }
+  .coin-form h3 { margin:0 0 4px; font-size:.95rem; }
+  .coin-form .field > span { white-space:normal; }
+  .coin-form .row { margin-bottom:10px; }
+  .err { display:block; color:var(--red); font-size:.78rem; font-weight:600; margin:3px 0 0; }
+  .err:empty { display:none; }
+  .form-btns { display:flex; gap:8px; margin-top:8px; }
 
   /* take profit from a ratio */
   .tp-mode > .lbl { margin-bottom:6px; }
@@ -139,7 +155,7 @@
   .pos { color:var(--green); }
   .neg { color:var(--red); }
   .amber { color:var(--amber-text); }
-  .small-note { font-size:.74rem; color:var(--faint); }
+  .small-note { font-size:.74rem; color:var(--faint); white-space:pre-line; }
   .tp { display:grid; grid-template-columns:1fr auto; gap:2px 12px; padding:10px 0; border-top:1px solid var(--line); }
   .tp:first-child { border-top:0; padding-top:4px; }
   .rr { text-align:right; }
@@ -254,10 +270,63 @@
           <h2 id="live-h">Live price · MEXC futures</h2>
           <span class="status" id="liveStatusBox" data-state="connecting" role="status"><i class="dot" aria-hidden="true"></i><span id="liveStatus">Connecting…</span></span>
         </div>
-        <div class="chips" role="radiogroup" aria-label="Coin">
+        <div class="chips" role="radiogroup" aria-label="Coin" id="coinChips">
           <input type="radio" name="symbol" id="sym-BTC_USDT" value="BTC_USDT" checked><label for="sym-BTC_USDT">BTC_USDT</label>
           <input type="radio" name="symbol" id="sym-ETH_USDT" value="ETH_USDT"><label for="sym-ETH_USDT">ETH_USDT</label>
           <input type="radio" name="symbol" id="sym-SOL_USDT" value="SOL_USDT"><label for="sym-SOL_USDT">SOL_USDT</label>
+          <button type="button" class="chip-add" id="addCoinBtn">+ Custom</button>
+        </div>
+        <div class="coin-bar" id="coinBar" hidden>
+          <span id="coinBarText"></span>
+          <button type="button" class="btn small" id="editCoinBtn">Edit</button>
+          <button type="button" class="btn small" id="deleteCoinBtn">Delete</button>
+        </div>
+        <div class="coin-bar" id="coinConfirm" hidden>
+          <span id="coinConfirmText"></span>
+          <button type="button" class="btn small danger" id="confirmDeleteBtn">Delete</button>
+          <button type="button" class="btn small" id="cancelDeleteBtn">Keep</button>
+        </div>
+        <div class="coin-form" id="coinForm" hidden>
+          <h3 id="coinFormTitle">Add a custom coin</h3>
+          <p class="hint">Find these numbers in MEXC's contract details for the pair, or ask Claude Code to fetch them with curl.</p>
+          <div class="row">
+            <label class="field"><span>Name (MEXC symbol)</span>
+              <input id="cc-symbol" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="XYZ_USDT">
+              <small class="err" id="cc-err-symbol"></small></label>
+          </div>
+          <div class="row cols-2">
+            <label class="field"><span>Contract size (coins per contract)</span>
+              <input id="cc-contractSize" type="text" inputmode="decimal" autocomplete="off" spellcheck="false"><small class="err" id="cc-err-contractSize"></small></label>
+            <label class="field"><span>Price step</span>
+              <input id="cc-priceStep" type="text" inputmode="decimal" autocomplete="off" spellcheck="false"><small class="err" id="cc-err-priceStep"></small></label>
+          </div>
+          <div class="row cols-2">
+            <label class="field"><span>Min volume (contracts)</span>
+              <input id="cc-minVol" type="text" inputmode="decimal" autocomplete="off" spellcheck="false"><small class="err" id="cc-err-minVol"></small></label>
+            <label class="field"><span>Volume step (contracts)</span>
+              <input id="cc-volStep" type="text" inputmode="decimal" autocomplete="off" spellcheck="false"><small class="err" id="cc-err-volStep"></small></label>
+          </div>
+          <div class="row cols-3">
+            <label class="field"><span>Maker fee %</span>
+              <input id="cc-makerPct" type="text" inputmode="decimal" autocomplete="off" spellcheck="false"><small class="err" id="cc-err-makerPct"></small></label>
+            <label class="field"><span>Taker fee %</span>
+              <input id="cc-takerPct" type="text" inputmode="decimal" autocomplete="off" spellcheck="false"><small class="err" id="cc-err-takerPct"></small></label>
+            <label class="field"><span>Maint. margin %</span>
+              <input id="cc-mmrPct" type="text" inputmode="decimal" autocomplete="off" spellcheck="false"><small class="err" id="cc-err-mmrPct"></small></label>
+          </div>
+          <div class="row cols-2">
+            <label class="field"><span>Min stop distance %</span>
+              <input id="cc-minStopPct" type="text" inputmode="decimal" autocomplete="off" spellcheck="false"><small class="err" id="cc-err-minStopPct"></small></label>
+            <label class="field"><span>Max leverage (optional)</span>
+              <input id="cc-maxLeverage" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" placeholder="optional"><small class="err" id="cc-err-maxLeverage"></small></label>
+          </div>
+          <p class="hint">Min stop distance is only used for the "tight stop" caution. 1.0% is a rough guess — change it to how far
+            this coin often moves in a few minutes.</p>
+          <p class="err" id="cc-err-form"></p>
+          <div class="form-btns">
+            <button type="button" class="btn-primary" id="saveCoinBtn">Save coin</button>
+            <button type="button" class="btn" id="cancelCoinBtn">Cancel</button>
+          </div>
         </div>
         <div class="live-row">
           <div class="live-left">
@@ -400,6 +469,8 @@
             Available is empty), position = margin × leverage, coins = position ÷ entry. Your risk is then whatever the
             stop makes it: loss at stop = coins × loss per coin, shown in USDT and as % of your balance — red above 2%.
             Near 100% the position is trimmed a little so the margin plus the opening fee still fit.</li>
+        <li><b>Custom coins</b> (+ Custom): you type the coin's contract details, fees, maintenance margin and minimum stop
+            distance; every formula here uses them exactly like the built-in coins' numbers.</li>
         <li><b>Order in contracts</b>: MEXC trades whole contracts (1 contract = 0.0001 BTC, 0.01 ETH or 0.1 SOL).
             Contracts = coins ÷ contract size, rounded <b>down</b> to MEXC's step — so the real risk ends up a little
             <i>below</i> your plan, never above. <b>All results</b> (position, margin, loss, profit, open risk) use this real
@@ -666,7 +737,7 @@ const FuturesMath = (() => {
   }
 
   const WARNING_ORDER = ['STOP_WRONG_SIDE', 'LIQ_BEFORE_STOP', 'AVAILABLE_ABOVE_BALANCE', 'NOT_ENOUGH_BALANCE',
-                         'ORDER_BELOW_MIN', 'TP_WRONG_SIDE', 'LOW_RR', 'HIGH_RISK'];
+                         'LEVERAGE_ABOVE_MAX', 'ORDER_BELOW_MIN', 'TP_WRONG_SIDE', 'LOW_RR', 'HIGH_RISK'];
 
   // The full calculator. Percent inputs are in percent (feePct 0.02 means 0.02%).
   // inp = { side, balance, riskPct, entry, stop, tps:[tp1,tp2,tp3], leverage, feePct, mmrPct,
@@ -717,6 +788,10 @@ const FuturesMath = (() => {
 
     // Warnings we can give even before everything is filled in
     if (good.riskPct && inp.riskPct > RISK_LIMIT_PCT) warnings.push({ code: 'HIGH_RISK', riskPct: inp.riskPct });
+    const maxLev = inp.contract && inp.contract.maxLeverage;          // custom coins can have a maximum leverage
+    if (good.leverage && maxLev > 0 && inp.leverage > maxLev) {
+      warnings.push({ code: 'LEVERAGE_ABOVE_MAX', leverage: inp.leverage, maxLeverage: maxLev, exchange: inp.contract.exchange });
+    }
     if (good.balance && opt.available != null && opt.available > inp.balance) {
       warnings.push({ code: 'AVAILABLE_ABOVE_BALANCE', available: opt.available, balance: inp.balance });
     }
@@ -1175,6 +1250,65 @@ function runSelfTest() {
   is('   lines shown', fixLines(f4).join(' / '), 'Suggested fix: lower the size slider to 19%. / ' +
      'Or reduce your open risk by 13.48 USDT (for example by moving a stop to breakeven).');   // 13.475 → 13.48
 
+  section('P. Custom coins (generic coin, no live prices: balance 1000, risk 1%, LONG 0.2 / stop 0.19, 10x, Market, maker 0, taker 0.02%, MMR 0.1%)');
+  const xyz = over => Object.assign({ exchange: 'MEXC', coin: 'XYZ_USDT', custom: true, contractSize: 10, minVol: 1, volStep: 1,
+    priceStep: 0.0001, makerPct: 0, takerPct: 0.02, mmrPct: 0.1, minStopPct: 1.0, maxLeverage: null }, over);
+  const cc = (contract, changes) => M.calculate(Object.assign({ side: 'long', balance: 1000, riskPct: 1, leverage: 10, entry: 0.2,
+    stop: 0.19, tps: [null, null, null], makerPct: 0, takerPct: 0.02, orderType: 'market', tpLimit: false, mmrPct: 0.1,
+    coin: 'XYZ_USDT', minStopPct: contract.minStopPct, contract }, changes));
+  const pA = cc(xyz({}));
+  is('Coin A (size 10, min 1, step 1) → contracts', pA.order.contracts, 99);
+  near('   = coins', pA.order.coins, 990, 1e-9);
+  near('   position (USDT)', pA.positionUsdt, 198, 1e-9);
+  near('   margin at 10x (USDT)', pA.margin, 19.8, 1e-9);
+  near('   actual loss at stop (USDT)', pA.loss.total, 9.97722, 1e-9);
+  near('   = % of balance', pA.riskPctUsed, 0.997722, 1e-9);
+  is('   no warnings', codes(pA), 'none');
+  const pB = cc(xyz({ volStep: 5 }));
+  is('Coin B (size 10, step 5) → contracts', pB.order.contracts, 95);
+  near('   = coins', pB.order.coins, 950, 1e-9);
+  near('   position (USDT)', pB.positionUsdt, 190, 1e-9);
+  near('   loss at stop (USDT)', pB.loss.total, 9.5741, 1e-9);
+  const pC = cc(xyz({ contractSize: 1000 }));
+  near('Coin C (size 1000) → contracts before rounding', pC.order.exactContracts, 0.992260, 1e-6);
+  is('   below the minimum → red warning, no order', `${codes(pC)} / ${pC.order.contracts} contracts / position ${pC.positionUsdt}`,
+     'ORDER_BELOW_MIN / 0 contracts / position 0');
+  const pL = cc(xyz({ maxLeverage: 5 }));
+  is('Coin A, max leverage 5, leverage 10 → red warning', codes(pL), 'LEVERAGE_ABOVE_MAX');
+  is('   warning text', warningText(pL.warnings[0], null), "Leverage 10x is above this coin's maximum of 5x on MEXC.");
+  is('   leverage 5 → no warning', codes(cc(xyz({ maxLeverage: 5 }), { leverage: 5 })), 'none');
+  const pT = cc(xyz({}), { stop: 0.199 });
+  is('Coin A, min stop 1.0%, stop 0.199 (0.5% away) → tight stop caution', pT.cautions.map(c => c.code).join(','), 'TIGHT_STOP');
+  is('   caution names the coin', warningText(pT.cautions[0], null),
+     'Stop is only 0.50% away. XYZ often moves that much in minutes, so normal noise could hit it.');
+  near('Liquidation uses the coin\'s maintenance margin (LONG 0.2 at 10x, MMR 0.1%)', pA.liquidation, 0.2 * 0.9 / 0.999, 1e-12);
+  const goodFields = { symbol: 'xyz_usdt', contractSize: '10', minVol: '1', volStep: '1', priceStep: '0,0001', makerPct: '0',
+                       takerPct: '0.02', mmrPct: '0.1', minStopPct: '1.0', maxLeverage: '' };
+  const vOk = validateCustomCoin(goodFields, [], null);
+  is('Valid coin: name uppercased, no errors', `${vOk.coin.symbol} / ${Object.keys(vOk.errors).join(',') || 'none'} / max leverage ${vOk.coin.maxLeverage}`,
+     'XYZ_USDT / none / max leverage null');
+  const vErr = changes => Object.keys(validateCustomCoin(Object.assign({}, goodFields, changes), [vOk.coin], null).errors).join(',');
+  is('Name "btc_usdt" → rejected (already exists)', vErr({ symbol: 'btc_usdt' }), 'symbol');
+  is('Name "xyz_usdt" again → rejected (duplicate)', vErr({}), 'symbol');
+  is('Name "my coin" → rejected (space)', vErr({ symbol: 'my coin' }), 'symbol');
+  is('Contract size 0 → rejected', vErr({ symbol: 'ABC_USDT', contractSize: '0' }), 'contractSize');
+  is('Fee 10, maintenance margin 100, min stop 0, max leverage 0.5 → each rejected',
+     vErr({ symbol: 'ABC_USDT', takerPct: '10', mmrPct: '100', minStopPct: '0', maxLeverage: '0.5' }), 'takerPct,mmrPct,minStopPct,maxLeverage');
+  const ten = Array.from({ length: 10 }, (_, i) => Object.assign({}, vOk.coin, { symbol: 'C' + i + '_USDT' }));
+  is('An 11th custom coin → rejected (max 10)', Object.keys(validateCustomCoin(Object.assign({}, goodFields, { symbol: 'NEW_USDT' }), ten, null).errors).join(','), 'form');
+  let savedCoins = null;
+  try { savedCoins = localStorage.getItem(CUSTOM_KEY); } catch (e) { /* storage blocked */ }
+  const two = [vOk.coin, Object.assign({}, vOk.coin, { symbol: 'ABC_USDT', contractSize: 100, maxLeverage: 20 })];
+  saveCustomCoins(two);
+  is('Saving two custom coins and reading them back → the same coins', JSON.stringify(loadCustomCoins()) === JSON.stringify(two), true);
+  saveCustomCoins(loadCustomCoins().filter(c => c.symbol !== 'XYZ_USDT'));
+  is('Deleting one leaves the other', loadCustomCoins().map(c => c.symbol).join(','), 'ABC_USDT');
+  try { localStorage.setItem(CUSTOM_KEY, '[{"symbol":"BAD NAME","contractSize":-1}, 42, "x"]'); } catch (e) { /* ignore */ }
+  is('Broken saved data is skipped, nothing breaks', loadCustomCoins().length, 0);
+  try { if (savedCoins == null) localStorage.removeItem(CUSTOM_KEY); else localStorage.setItem(CUSTOM_KEY, savedCoins); } catch (e) { /* ignore */ }
+  is('Live feed only tries MEXC-style names', ['XYZ_USDT', 'XYZ', 'MY COIN', 'BTC_USDT'].map(L.isSymbol).join(','), 'true,false,false,true');
+  is('Built-in coins unchanged (contract sizes)', BUILTIN_COINS.map(c => EXCHANGES.MEXC.coins[c].contractSize).join(' / '), '0.0001 / 0.01 / 0.1');
+
   const passed = rows.filter(r => r.pass === true).length;
   const total = rows.filter(r => !r.header).length;
   return { rows, passed, total };
@@ -1273,16 +1407,80 @@ const exchangeId = () => (EXCHANGES[$('exchange').value] ? $('exchange').value :
 function currentCoin() { const r = document.querySelector('input[name="symbol"]:checked'); return r ? r.value : 'BTC_USDT'; }
 function orderType() { const r = document.querySelector('input[name="orderType"]:checked'); return r && r.value === 'limit' ? 'limit' : 'market'; }
 
-// Contract details of a coin on an exchange, for the math: { exchange, coin, contractSize, minVol, volStep, priceStep }.
+/* Custom coins: your own MEXC pairs, saved in this browser (max 10). The built-in coins above never change.
+   A custom coin = { symbol, contractSize, minVol, volStep, priceStep, makerPct, takerPct, mmrPct, minStopPct, maxLeverage|null } */
+const CUSTOM_KEY = 'futures-calculator.custom-coins.v1';
+const MAX_CUSTOM = 10;
+const BUILTIN_COINS = Object.values(EXCHANGES).flatMap(e => Object.keys(e.coins));
+const CUSTOM_FIELDS = ['symbol', 'contractSize', 'minVol', 'volStep', 'priceStep', 'makerPct', 'takerPct', 'mmrPct', 'minStopPct', 'maxLeverage'];
+
+// Check the form (all values as typed). Returns { coin, errors } — errors maps a field to its message.
+// `list` = the coins already saved, `editing` = the name of the coin being edited (null when adding).
+function validateCustomCoin(fields, list, editing) {
+  const errors = {}, P = FuturesMath.parseNumber, coin = {};
+  const symbol = String(fields.symbol == null ? '' : fields.symbol).trim().toUpperCase();
+  if (!symbol) errors.symbol = 'Type a name, like XYZ_USDT.';
+  else if (!/^[A-Z0-9_]+$/.test(symbol)) errors.symbol = 'Use only letters, digits and _ (like XYZ_USDT).';
+  else if (symbol.length > 30) errors.symbol = 'Too long — 30 characters at most.';
+  else if (BUILTIN_COINS.includes(symbol)) errors.symbol = `${symbol} already exists (built-in coin) — pick another name.`;
+  else if (list.some(c => c.symbol === symbol && c.symbol !== editing)) errors.symbol = `You already have a coin called ${symbol}.`;
+  coin.symbol = symbol;
+  const num = (key, ok, msg, optional) => {
+    const v = P(fields[key]);
+    if (v == null) { if (optional) { coin[key] = null; return; } errors[key] = 'Required.'; return; }
+    if (!Number.isFinite(v) || !ok(v)) { errors[key] = msg; return; }
+    coin[key] = v;
+  };
+  for (const k of ['contractSize', 'minVol', 'volStep', 'priceStep']) num(k, v => v > 0, 'Must be greater than 0.');
+  num('makerPct', v => v >= 0 && v < 10, '0 to 10.');
+  num('takerPct', v => v >= 0 && v < 10, '0 to 10.');
+  num('mmrPct', v => v >= 0 && v < 100, '0 to 100.');
+  num('minStopPct', v => v > 0, 'Must be above 0.');
+  num('maxLeverage', v => v >= 1, 'Leave empty, or 1 or more.', true);
+  if (!editing && list.length >= MAX_CUSTOM) errors.form = `You can save up to ${MAX_CUSTOM} custom coins — delete one first.`;
+  return { coin, errors };
+}
+// Saved custom coins (unreadable or broken entries are skipped, so a bad save can't break the page).
+function loadCustomCoins() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(CUSTOM_KEY));
+    if (!Array.isArray(raw)) return [];
+    const list = [];
+    for (const item of raw) {
+      if (!item || typeof item !== 'object' || list.length >= MAX_CUSTOM) continue;
+      const fields = {};
+      for (const k of CUSTOM_FIELDS) fields[k] = item[k] == null ? '' : String(item[k]);
+      const { coin, errors } = validateCustomCoin(fields, list, null);
+      if (!Object.keys(errors).length) list.push(coin);
+    }
+    return list;
+  } catch (e) { return []; }
+}
+function saveCustomCoins(list) { try { localStorage.setItem(CUSTOM_KEY, JSON.stringify(list)); } catch (e) { /* not remembered */ } }
+let customCoins = loadCustomCoins();
+const customCoin = sym => customCoins.find(c => c.symbol === sym) || null;
+
+// Everything the calculator knows about a coin: built-in profile, or your custom coin.
+function coinProfile(sym) {
+  const ex = EXCHANGES[exchangeId()];
+  if (ex.coins[sym]) return ex.coins[sym];
+  const c = customCoin(sym);
+  return c ? Object.assign({ custom: true }, c) : null;
+}
+const isKnownCoin = sym => Boolean(coinProfile(sym));
+
+// Contract details of a coin on an exchange, for the math: { exchange, coin, contractSize, minVol, volStep, priceStep, … }.
 function contractFor(exchange, coin) {
-  const ex = EXCHANGES[exchange] || EXCHANGES[Object.keys(EXCHANGES)[0]], p = ex.coins[coin];
+  const ex = EXCHANGES[exchange] || EXCHANGES[Object.keys(EXCHANGES)[0]];
+  const c = ex.coins[coin] ? null : customCoin(coin);
+  const p = ex.coins[coin] || (c && Object.assign({ custom: true }, c));
   return p && p.contractSize > 0 ? Object.assign({ exchange: ex.name, coin }, p) : null;
 }
 
 // Put the selected coin's fees and maintenance margin rate in the boxes: what you typed for that coin before,
 // or the exchange's numbers (maintenance margin falls back to 0.5% for a coin the profile doesn't know).
 function loadCoinFees() {
-  const p = EXCHANGES[exchangeId()].coins[currentCoin()] || {};
+  const p = coinProfile(currentCoin()) || {};
   const mine = (feeEdits[exchangeId()] || {})[currentCoin()] || {};
   const pick = (typed, std) => (typeof typed === 'string' && typed.trim() !== '' ? typed : std != null ? String(std) : '');
   $('makerPct').value = pick(mine.maker, p.makerPct);
@@ -1301,9 +1499,14 @@ function currentFees() {
   return FuturesMath.feeLegs(maker, taker, orderType(), $('tpLimit').checked);
 }
 function feeSourceText() {
-  const ex = EXCHANGES[exchangeId()], coin = currentCoin(), p = ex.coins[coin];
+  const ex = EXCHANGES[exchangeId()], coin = currentCoin(), p = coinProfile(coin);
   if (!p) return '';
   const base = coin.split('_')[0];
+  if (p.custom) {
+    return `${coin} (your custom coin): maker ${p.makerPct}%, taker ${p.takerPct}%, maintenance margin ${p.mmrPct}% from the ` +
+           `coin's settings — Edit the coin to change them. Contract: 1 = ${p.contractSize} ${base}, minimum ${p.minVol}, ` +
+           `step ${p.volStep}, price step ${p.priceStep}${p.maxLeverage ? `, max leverage ${p.maxLeverage}x` : ''}.`;
+  }
   return `${coin} on ${ex.name}: default maker ${p.makerPct}%, taker ${p.takerPct}% — ${ex.name}'s contract data gave different ` +
          `fees on different requests (${ex.fetched}), so this is the highest seen. Check your real fee on ${ex.name} and type it ` +
          `here (remembered for each coin). Maintenance margin ${p.mmrPct}% is ${ex.name}'s first-tier rate for ${base}. ` +
@@ -1338,8 +1541,9 @@ function readRaw() {
 
 function toInputs(raw) {
   const n = k => FuturesMath.parseNumber(raw[k]);
-  const coin = CAUTION_FIELDS[raw.symbol] ? raw.symbol : 'BTC_USDT';      // the coin picked under Live price
-  const minStop = n(CAUTION_FIELDS[coin]);
+  const coin = isKnownCoin(raw.symbol) ? raw.symbol : 'BTC_USDT';        // the coin picked under Live price
+  const custom = customCoin(coin);
+  const minStop = custom ? custom.minStopPct : n(CAUTION_FIELDS[coin]);  // custom coins carry their own minimum
   const maxOpen = n('maxOpenRiskPct');
   return { side: raw.side, balance: n('balance'), riskPct: n('riskPct'), leverage: n('leverage'),
            available: n('available'), openRisk: n('openRisk'),
@@ -1381,6 +1585,8 @@ function warningText(w, P) {
              `(${Fmt.num(minCoins, Fmt.decimalsOf(minCoins))} ${base} ≈ ${Fmt.usdt(minCoins * w.entry)} USDT). ` +
              'Use a closer stop or a bigger risk, or skip this trade.';
     }
+    case 'LEVERAGE_ABOVE_MAX':
+      return `Leverage ${w.leverage}x is above this coin's maximum of ${w.maxLeverage}x on ${w.exchange || 'the exchange'}.`;
     case 'AVAILABLE_ABOVE_BALANCE':
       return `Available (${Fmt.usdt(w.available)} USDT) is more than your balance (${Fmt.usdt(w.balance)} USDT). Available is ` +
              'the part of your balance not yet used as margin, so it can\'t be bigger — check both numbers.';
@@ -1518,7 +1724,8 @@ function render(res, inp) {
     const base = c.coin.split('_')[0];
     $('o-qty').textContent = `${Fmt.num(o.contracts, Fmt.decimalsOf(c.volStep || 1))} contract${o.contracts === 1 ? '' : 's'} = ` +
       `${Fmt.num(o.coins, Fmt.decimalsOf(c.contractSize))} ${base}`;
-    $('o-planned').textContent = `Planned before rounding: ${Fmt.usdt(res.planned.positionUsdt)} USDT · risk ${Fmt.usdt(res.planned.riskAmount)}`;
+    $('o-planned').textContent = `Order on ${c.exchange} (${c.coin})\n` +
+      `Planned before rounding: ${Fmt.usdt(res.planned.positionUsdt)} USDT · risk ${Fmt.usdt(res.planned.riskAmount)}`;
   } else {
     $('o-qty').textContent = `${Fmt.coins(res.qty)} coins`;
   }
@@ -1689,7 +1896,7 @@ function applyAuto() {
   const feeOk = fees != null;
   const ratios = mode === 'ladder' ? [1, 2, 3] : mode === 'custom' ? [n('customR')] : [Number(mode)];
   const ids = calculatedIds();
-  const step = (EXCHANGES[exchangeId()].coins[currentCoin()] || {}).priceStep;   // round to the exchange's price step
+  const step = (coinProfile(currentCoin()) || {}).priceStep;   // round to the exchange's price step
   const clear = () => ids.forEach(id => { $(id).value = ''; });
 
   if (mode === 'custom' && !(ratios[0] > 0)) {
@@ -1770,7 +1977,7 @@ function syncMarketEntry() {
   }
   btn.disabled = true;                                  // nothing live to freeze
   entry.readOnly = false;
-  const waiting = live.state === 'connecting' || live.state === 'connected';
+  const waiting = (live.state === 'connecting' || live.state === 'connected') && !noLivePriceFor(currentCoin());
   return { warn: true, note: (waiting ? 'Waiting for the live price — until it arrives, ' : 'Live price unavailable — ') +
                              'the Market order uses the entry you type. Opening fee = taker.' };
 }
@@ -1786,6 +1993,7 @@ function syncSizeMode() {
 
 function update() {
   syncSizeMode();
+  syncCoinBar();
   const market = syncMarketEntry();
   $('orderHint').textContent = market.note;
   $('orderHint').classList.toggle('caution', Boolean(market.warn));
@@ -1811,6 +2019,7 @@ function update() {
 // (Switching "TP from stop" / "Stop from TP" keeps the numbers in the boxes; applyAuto does the rest.)
 function onFormEdit(e) {
   const t = e.target;
+  if (t && t.closest && t.closest('#coinForm')) return;   // typing in the custom-coin form changes nothing until Save
   if (t && t.name === 'tpMode') onTpModeChange();
   else if (t && calculatedIds().includes(t.id)) setTpMode('manual');   // you typed in a calculated box: keep your number
   if (t && (t.id === 'makerPct' || t.id === 'takerPct' || t.id === 'mmrPct')) rememberCoinFees();
@@ -1857,6 +2066,8 @@ $('clearTrade').addEventListener('click', () => {
 const LiveFeed = (() => {
   const URL = 'wss://contract.mexc.com/edge';
   const SYMBOLS = ['BTC_USDT', 'ETH_USDT', 'SOL_USDT'];
+  // A name MEXC could know: letters/digits, an underscore, letters/digits (like BTC_USDT). Anything else is never sent.
+  const isSymbol = s => typeof s === 'string' && /^[A-Z0-9]{1,20}_[A-Z0-9]{2,10}$/.test(s);
   const PING_EVERY_MS = 15000;      // docs: ping every 10–20 s; the server closes after 60 s without one
   const SILENCE_LIMIT_MS = 40000;   // nothing received for this long → the connection is dead, reconnect
   const RETRIES_BEFORE_OFFLINE = 4; // after 4 failed tries, show "Offline" (but keep trying)
@@ -1913,7 +2124,7 @@ const LiveFeed = (() => {
         if (ws !== sock) return;
         failures = 0;
         lastHeard = Date.now();
-        send({ method: 'sub.ticker', param: { symbol } });
+        if (isSymbol(symbol)) send({ method: 'sub.ticker', param: { symbol } });
         pingTimer = setInterval(() => send({ method: 'ping' }), PING_EVERY_MS);
         watchTimer = setInterval(() => { if (Date.now() - lastHeard > SILENCE_LIMIT_MS) { closeQuietly(); retry(); } }, 5000);
         status('connected');
@@ -1939,12 +2150,12 @@ const LiveFeed = (() => {
     }
 
     return {
-      start(s) { if (SYMBOLS.includes(s)) symbol = s; open(); },
+      start(s) { if (typeof s === 'string') symbol = s; open(); },
       setSymbol(s) {
-        if (!SYMBOLS.includes(s) || s === symbol) return;
-        send({ method: 'unsub.ticker', param: { symbol } });
+        if (typeof s !== 'string' || s === symbol) return;
+        if (isSymbol(symbol)) send({ method: 'unsub.ticker', param: { symbol } });
         symbol = s;
-        send({ method: 'sub.ticker', param: { symbol } });   // if not connected, open() subscribes later
+        if (isSymbol(symbol)) send({ method: 'sub.ticker', param: { symbol } });   // if not connected, open() subscribes later
       },
       // Back on the tab, or the phone is online again: reconnect now unless the connection is healthy.
       wake() {
@@ -1956,11 +2167,19 @@ const LiveFeed = (() => {
     };
   }
 
-  return { URL, SYMBOLS, PING_EVERY_MS, STALE_PRICE_MS, retryDelay, parseMessage, createConnection };
+  return { URL, SYMBOLS, PING_EVERY_MS, STALE_PRICE_MS, retryDelay, parseMessage, createConnection, isSymbol };
 })();
 
 const live = { symbol: 'BTC_USDT', price: null, bid: null, ask: null, priceSymbol: null, at: 0, decimals: {},
-               state: 'connecting', detail: '', error: '' };
+               state: 'connecting', detail: '', error: '', symbolAt: Date.now() };
+const NO_PRICE_MS = 10000;   // a custom coin with no price after this long: say so
+// True when a custom coin clearly has no live price: not a MEXC-style name, MEXC answered with an error,
+// or nothing arrived for 10 s while connected. (Built-in coins keep their usual notes.)
+function noLivePriceFor(sym) {
+  if (!customCoin(sym) || (live.price != null && live.priceSymbol === sym)) return false;
+  return !LiveFeed.isSymbol(sym) || Boolean(live.error) ||
+         (live.state === 'connected' && Date.now() - live.symbolAt > NO_PRICE_MS);
+}
 let liveConn = null;
 const STATUS_TEXT = { connecting: 'Connecting…', connected: 'Connected', reconnecting: 'Reconnecting…', offline: 'Offline' };
 
@@ -1986,6 +2205,11 @@ function renderLive() {
   else if (live.state === 'connecting') note = 'Connecting to MEXC…';
   else if (fresh) note = age <= 1 ? `${live.symbol} last price · updated just now` : `${live.symbol} last price · updated ${age} s ago`;
   else if (has) note = `No update for ${age} s — not live`;
+  else if (noLivePriceFor(currentCoin())) {
+    const sym = currentCoin();
+    note = `No live price for ${sym}, type prices by hand` +
+           (!LiveFeed.isSymbol(sym) ? ' (MEXC names look like XYZ_USDT).' : live.error ? ` (${live.error}).` : '.');
+  }
   else note = live.error || `Waiting for the first ${live.symbol} price…`;
   $('liveAge').textContent = note;
 }
@@ -2016,14 +2240,100 @@ $('useLive').addEventListener('click', () => {
   btn.textContent = 'Copied ✓';
   setTimeout(() => { entry.classList.remove('flash'); btn.textContent = 'Use live price'; }, 1200);
 });
-document.querySelectorAll('input[name="symbol"]').forEach(radio => radio.addEventListener('change', () => {
-  live.symbol = radio.value;
+$('coinChips').addEventListener('change', e => {      // any coin button, built-in or custom
+  if (e.target.name !== 'symbol') return;
+  live.symbol = e.target.value; live.symbolAt = Date.now();
   live.price = null; live.bid = null; live.ask = null; live.priceSymbol = null; live.error = '';   // never show the old coin's price
   if (liveConn) liveConn.setSymbol(live.symbol);
   renderLive();
-}));
+});
+
+/* Custom coin buttons, the Edit / Delete bar and the form (all in the page). */
+function renderCustomChips() {
+  const box = $('coinChips'), add = $('addCoinBtn'), selected = currentCoin();
+  box.querySelectorAll('.custom-coin').forEach(el => el.remove());
+  for (const c of customCoins) {
+    const input = document.createElement('input');
+    input.type = 'radio'; input.name = 'symbol'; input.id = 'sym-' + c.symbol; input.value = c.symbol; input.className = 'custom-coin';
+    const label = document.createElement('label');
+    label.htmlFor = input.id; label.className = 'custom-coin'; label.textContent = c.symbol;
+    box.insertBefore(input, add); box.insertBefore(label, add);
+  }
+  ($('sym-' + selected) || $('sym-BTC_USDT')).checked = true;
+  add.disabled = customCoins.length >= MAX_CUSTOM;
+  add.title = add.disabled ? `You can save up to ${MAX_CUSTOM} custom coins` : '';
+}
+function syncCoinBar() {
+  const c = customCoin(currentCoin());
+  $('coinBar').hidden = !c || !$('coinConfirm').hidden || !$('coinForm').hidden;
+  if (c) $('coinBarText').textContent = `${c.symbol} is your custom coin.`;
+}
+// Select a coin as if you had tapped it (the live feed and the calculator follow).
+function selectCoin(sym) {
+  const r = $('sym-' + sym) || $('sym-BTC_USDT');
+  r.checked = true;
+  r.dispatchEvent(new Event('change', { bubbles: true }));
+}
+let editingCoin = null;   // name of the custom coin in the form, or null when adding a new one
+function openCoinForm(sym) {
+  const c = sym ? customCoin(sym) : null;
+  editingCoin = c ? c.symbol : null;
+  $('coinFormTitle').textContent = c ? `Edit ${c.symbol}` : 'Add a custom coin';
+  const start = c ? c : { symbol: '', contractSize: '', minVol: 1, volStep: 1, priceStep: '', makerPct: '', takerPct: '', mmrPct: '',
+                          minStopPct: 1.0, maxLeverage: null };
+  for (const k of CUSTOM_FIELDS) {
+    const v = start[k];
+    $('cc-' + k).value = v == null ? '' : k === 'minStopPct' && v === 1 && !c ? '1.0' : String(v);
+    $('cc-err-' + k).textContent = '';
+  }
+  $('cc-err-form').textContent = '';
+  $('coinConfirm').hidden = true;
+  $('coinForm').hidden = false;
+  syncCoinBar();
+  $('cc-symbol').focus();
+}
+function closeCoinForm() { $('coinForm').hidden = true; editingCoin = null; syncCoinBar(); }
+function saveCoinForm() {
+  const fields = {};
+  for (const k of CUSTOM_FIELDS) fields[k] = $('cc-' + k).value;
+  const { coin, errors } = validateCustomCoin(fields, customCoins, editingCoin);
+  for (const k of CUSTOM_FIELDS) $('cc-err-' + k).textContent = errors[k] || '';
+  $('cc-err-form').textContent = errors.form || '';
+  $('cc-symbol').value = coin.symbol;                    // uppercased
+  if (Object.keys(errors).length) return;
+  const wasEditing = editingCoin, wasSelected = wasEditing && currentCoin() === wasEditing;
+  if (wasEditing) customCoins = customCoins.map(c => (c.symbol === wasEditing ? coin : c));
+  else customCoins = customCoins.concat([coin]);
+  saveCustomCoins(customCoins);
+  const ex = feeEdits[exchangeId()];                     // new numbers for this coin: forget fee edits made for it
+  if (ex) { delete ex[coin.symbol]; if (wasEditing) delete ex[wasEditing]; }
+  closeCoinForm();
+  renderCustomChips();
+  if (!wasEditing || wasSelected) selectCoin(coin.symbol);   // show the new (or edited) coin
+  else update();
+}
+$('addCoinBtn').addEventListener('click', () => openCoinForm(null));
+$('editCoinBtn').addEventListener('click', () => openCoinForm(currentCoin()));
+$('cancelCoinBtn').addEventListener('click', closeCoinForm);
+$('saveCoinBtn').addEventListener('click', saveCoinForm);
+$('deleteCoinBtn').addEventListener('click', () => {
+  $('coinConfirmText').textContent = `Delete ${currentCoin()}? This can't be undone.`;
+  $('coinConfirm').hidden = false;
+  syncCoinBar();
+});
+$('cancelDeleteBtn').addEventListener('click', () => { $('coinConfirm').hidden = true; syncCoinBar(); });
+$('confirmDeleteBtn').addEventListener('click', () => {
+  const sym = currentCoin();
+  customCoins = customCoins.filter(c => c.symbol !== sym);
+  saveCustomCoins(customCoins);
+  if (feeEdits[exchangeId()]) delete feeEdits[exchangeId()][sym];
+  $('coinConfirm').hidden = true;
+  renderCustomChips();                                   // the deleted coin was selected: back to BTC_USDT
+  selectCoin('BTC_USDT');
+});
 
 for (const id of Object.keys(EXCHANGES)) $('exchange').append(new Option(EXCHANGES[id].name, id));
+renderCustomChips();
 const saved = loadInputs();
 if (saved) fillForm(saved);
 loadCoinFees();
