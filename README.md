@@ -102,8 +102,8 @@ To make the calculator size exactly this trade, enter **balance 1321.11** and **
 | Position (balance 1321.11, risk 1%) | ≈ 1772 | **1,771.99 USDT** | ✅ |
 | Loss at stop incl. fees = chosen risk | exactly | difference **0.000000000** | ✅ |
 
-The self-test has 65 checks in total: your trade, a LONG trade, every warning,
-number reading (`66783,9`, `66,783.9`, spaces), remembering inputs, and reading MEXC messages
+The self-test has 70 checks in total: your trade, a LONG trade, every warning,
+number reading (`66783,9`, `66,783.9`, `1,772` = 1772, `0,025` = 0.025, spaces), remembering inputs, and reading MEXC messages
 (real samples, plus broken, negative and wrong-coin messages). All pass.
 The expected numbers were computed separately in Python, not by the calculator itself.
 

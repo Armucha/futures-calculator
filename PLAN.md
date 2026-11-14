@@ -47,6 +47,9 @@ maintenance margin rate (default 0.5%).
 5. Minimum leverage is chosen so margin + opening fee fit inside the balance, rounded up to a whole number.
 6. Funding fees and slippage are ignored.
 7. Number inputs accept both `.` and `,` as the decimal mark (many European phone keyboards type `,`).
+   A single comma followed by exactly 3 digits is a thousands separator (`66,783` = 66783, `1,772` = 1772),
+   unless the part before it is 0 (`0,025` = 0.025). Several commas, or comma + dot, = thousands (`1,234,567`, `66,783.9`).
+   (Fixed 2026-11-14: before, `66,783` was read as 66.783.)
 8. Testing: there is no Node.js on this PC, so the math is tested by a
    self-test built into the HTML (open it with `#test` at the end of the
    address). `run-tests.sh` runs it in headless Firefox. The expected numbers

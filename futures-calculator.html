@@ -220,7 +220,7 @@
           <label class="field"><span>Maint. margin (%)</span>
             <input id="mmrPct" type="text" inputmode="decimal" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="done"></label>
         </div>
-        <p class="hint">Defaults: taker fee 0.02%, maintenance margin 0.5%. Change them to match your exchange. You can type <b>.</b> or <b>,</b> for decimals.</p>
+        <p class="hint">Defaults: taker fee 0.02%, maintenance margin 0.5%. Change them to match your exchange. You can type <b>.</b> or <b>,</b> for decimals — but a comma followed by exactly 3 digits counts as thousands (<b>1,772</b> = 1772; <b>0,025</b> stays 0.025).</p>
       </section>
     </form>
 
@@ -288,14 +288,24 @@ const FuturesMath = (() => {
   // "good for me" (positive) or "bad for me" (negative).
   const dir = side => (side === 'short' ? -1 : 1);
 
-  // Read a number typed by a person. Accepts "1.5", "1,5", "66 783,9", "66,783.9".
+  // Read a number typed by a person. Accepts "1.5", "1,5", "66 783,9", "66,783.9", "1,772".
+  // Comma rules:
+  //   - with a dot too, or more than one comma → commas are thousands separators ("66,783.9", "1,234,567")
+  //   - one comma followed by exactly 3 digits → thousands ("66,783" = 66783, "1,772" = 1772),
+  //     UNLESS the part before it is 0 → decimal ("0,025" = 0.025)
+  //   - any other single comma → decimal mark ("66783,9", "1,5", "0,02")
   // Returns null for an empty box and NaN for anything that is not a positive-looking number.
   function parseNumber(text) {
     let s = String(text == null ? '' : text).replace(/[\s  ]/g, '');
     if (s === '') return null;
     const commas = (s.match(/,/g) || []).length;
-    if (commas && (s.includes('.') || commas > 1)) s = s.replace(/,/g, ''); // commas are thousands
-    else s = s.replace(',', '.');                                          // comma is the decimal mark
+    if (commas && (s.includes('.') || commas > 1)) {
+      s = s.replace(/,/g, '');                                  // commas are thousands
+    } else if (commas === 1) {
+      const [before, after] = s.split(',');
+      const thousands = /^\d{3}$/.test(after) && !/^\+?0*$/.test(before);
+      s = thousands ? before + after : before + '.' + after;     // "1,772" → 1772, "0,025" → 0.025
+    }
     if (!/^\+?(\d+\.?\d*|\.\d+)(e[+-]?\d+)?$/i.test(s)) return NaN;
     return Number(s);
   }
@@ -506,10 +516,15 @@ function runSelfTest() {
   is('Same trade at 2x → fits', codes(calc({ balance: 100, riskPct: 2, stop: 99, tps: [103, null, null], leverage: 2, feePct: 0.02 })), 'none');
 
   section('E. Reading typed numbers');
-  is('"66783,9" (comma decimal)', M.parseNumber('66783,9'), 66783.9);
+  is('"66,783" (comma + 3 digits = thousands)', M.parseNumber('66,783'), 66783);
+  is('"1,772" (comma + 3 digits = thousands)', M.parseNumber('1,772'), 1772);
+  is('"1,234,567" (several commas = thousands)', M.parseNumber('1,234,567'), 1234567);
   is('"66,783.9" (copied from exchange)', M.parseNumber('66,783.9'), 66783.9);
-  is('" 1 772 " (spaces)', M.parseNumber(' 1 772 '), 1772);
+  is('"66783,9" (comma decimal)', M.parseNumber('66783,9'), 66783.9);
   is('"0,02" (fee)', M.parseNumber('0,02'), 0.02);
+  is('"0,025" (0 before the comma = decimal, even with 3 digits)', M.parseNumber('0,025'), 0.025);
+  is('"1,5" (comma decimal)', M.parseNumber('1,5'), 1.5);
+  is('" 1 772 " (spaces)', M.parseNumber(' 1 772 '), 1772);
   is('empty box → nothing', M.parseNumber(''), null);
   is('"abc" → not a number', M.parseNumber('abc'), NaN);
   is('"-5" → not allowed', M.parseNumber('-5'), NaN);
