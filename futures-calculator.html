@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#0d1117">
+<title>Futures Calculator</title>
+<style>
+  :root { --bg:#0d1117; --card:#161b22; --line:#2a313c; --text:#e6edf3; --muted:#8b949e; --green:#3fb950; --red:#ff6b6b; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 1040px; margin: 0 auto; padding: 16px; }
+  /* self-test */
+  #selftest { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px; margin-bottom:16px; overflow-x:auto; }
+  #selftest h2 { margin:0 0 4px; font-size:1.15rem; }
+  #selftest table { border-collapse:collapse; width:100%; font-size:.85rem; font-variant-numeric: tabular-nums; }
+  #selftest td, #selftest th { padding:5px 6px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top; }
+  #selftest th { color:var(--muted); font-weight:600; }
+  #selftest .grp td { color:var(--muted); font-weight:600; padding-top:14px; }
+  .pass { color:var(--green); font-weight:700; }
+  .fail { color:var(--red); font-weight:700; }
+</style>
+</head>
+<body>
+<main>
+  <section id="selftest" hidden></section>
+  <h1>Futures Calculator</h1>
+  <p>Math engine ready. Screen comes in step 3. <a href="#test" style="color:var(--muted)">Run self-test</a></p>
+</main>
+
+<script>
+'use strict';
+
+/* =====================================================================
+   1. MATH — pure functions, no page code.
+      All rates here are fractions: 0.02% is 0.0002, 0.5% is 0.005.
+   ===================================================================== */
+const FuturesMath = (() => {
+  const RISK_LIMIT_PCT = 2;   // warn above this risk per trade
+  const MIN_RR = 1.5;         // warn below this reward-to-risk (after fees)
+
+  // +1 for LONG, -1 for SHORT. Multiplying a price move by this turns it into
+  // "good for me" (positive) or "bad for me" (negative).
+  const dir = side => (side === 'short' ? -1 : 1);
+
+  // Read a number typed by a person. Accepts "1.5", "1,5", "66 783,9", "66,783.9".
+  // Returns null for an empty box and NaN for anything that is not a positive-looking number.
+  function parseNumber(text) {
+    let s = String(text == null ? '' : text).replace(/[\s  ]/g, '');
+    if (s === '') return null;
+    const commas = (s.match(/,/g) || []).length;
+    if (commas && (s.includes('.') || commas > 1)) s = s.replace(/,/g, ''); // commas are thousands
+    else s = s.replace(',', '.');                                          // comma is the decimal mark
+    if (!/^\+?(\d+\.?\d*|\.\d+)(e[+-]?\d+)?$/i.test(s)) return NaN;
+    return Number(s);
+  }
+
+  // Money lost per 1 coin if the stop is hit: the price move against us,
+  // plus the entry fee, plus the exit fee.
+  function lossPerCoin(side, entry, stop, fee) {
+    return (entry - stop) * dir(side) + fee * (entry + stop);
+  }
+
+  // Result of closing `qty` coins at the `exit` price.
+  function closeAt(side, entry, exit, qty, fee) {
+    const gross = (exit - entry) * dir(side) * qty;  // from the price move
+    const fees = fee * qty * (entry + exit);         // entry fee + exit fee
+    return { gross, fees, net: gross - fees };
+  }
+
+  // Price where closing the trade gives exactly 0 after both fees.
+  function breakevenPrice(side, entry, fee) {
+    const d = dir(side);
+    return entry * (1 + d * fee) / (1 - d * fee);
+  }
+
+  // Approximate isolated-margin liquidation price: the price where your margin,
+  // minus the loss, has shrunk to the maintenance margin.
+  // (First maintenance tier only; ignores fees and funding.)
+  function liquidationPrice(side, entry, leverage, mmr) {
+    const d = dir(side);
+    return Math.max(0, entry * (1 - d / leverage) / (1 - d * mmr));
+  }
+
+  const stopIsOnRightSide = (side, entry, stop) => (entry - stop) * dir(side) > 0;
+  const tpIsOnRightSide = (side, entry, tp) => (tp - entry) * dir(side) > 0;
+
+  // Everything about a trade once the number of coins is known.
+  // t = { side, entry, stop, tps:[...], qty, leverage, fee, mmr, balance (or null) }
+  function evaluate(t) {
+    const d = dir(t.side);
+    const positionUsdt = t.qty * t.entry;
+    const margin = positionUsdt / t.leverage;
+    const openFee = positionUsdt * t.fee;
+
+    const s = closeAt(t.side, t.entry, t.stop, t.qty, t.fee);
+    const loss = { price: -s.gross, fees: s.fees, total: -s.net };
+    const stopDistance = (t.entry - t.stop) * d;
+
+    const takeProfits = [];
+    (t.tps || []).forEach((price, i) => {
+      if (price == null) return;
+      const r = closeAt(t.side, t.entry, price, t.qty, t.fee);
+      takeProfits.push({
+        n: i + 1, price, gross: r.gross, fees: r.fees, net: r.net,
+        rightSide: tpIsOnRightSide(t.side, t.entry, price),
+        rrAfterFees: r.net / loss.total,
+        rrBeforeFees: ((price - t.entry) * d) / stopDistance,
+      });
+    });
+
+    const liquidation = liquidationPrice(t.side, t.entry, t.leverage, t.mmr);
+    const liqBeforeStop = d === 1 ? liquidation >= t.stop : liquidation <= t.stop;
+
+    // Does margin + opening fee fit in the balance? If not, find the smallest whole leverage that does.
+    const notEnoughBalance = t.balance != null && margin + openFee > t.balance;
+    let minLeverage = null;
+    if (notEnoughBalance) {
+      const room = t.balance - openFee;
+      minLeverage = room > 0 ? Math.ceil(positionUsdt / room - 1e-9) : Infinity;
+    }
+
+    return {
+      qty: t.qty, positionUsdt, margin, openFee, loss, stopDistance,
+      stopDistancePct: stopDistance / t.entry * 100,
+      takeProfits, breakeven: breakevenPrice(t.side, t.entry, t.fee),
+      liquidation, liqBeforeStop, notEnoughBalance, minLeverage,
+    };
+  }
+
+  const WARNING_ORDER = ['STOP_WRONG_SIDE', 'LIQ_BEFORE_STOP', 'NOT_ENOUGH_BALANCE', 'TP_WRONG_SIDE', 'LOW_RR', 'HIGH_RISK'];
+
+  // The full calculator. Percent inputs are in percent (feePct 0.02 means 0.02%).
+  // inp = { side, balance, riskPct, entry, stop, tps:[tp1,tp2,tp3], leverage, feePct, mmrPct }
+  // Empty boxes are null, unreadable ones NaN.
+  function calculate(inp) {
+    const missing = [], invalid = [], warnings = [];
+    const rules = {
+      balance: v => v > 0, riskPct: v => v > 0 && v <= 100, entry: v => v > 0, stop: v => v > 0,
+      leverage: v => v >= 1, feePct: v => v >= 0 && v < 10, mmrPct: v => v >= 0 && v < 100,
+    };
+    const good = {};
+    for (const key of Object.keys(rules)) {
+      const v = inp[key];
+      if (v == null) missing.push(key);
+      else if (!Number.isFinite(v) || !rules[key](v)) invalid.push(key);
+      else good[key] = true;
+    }
+    const tps = [0, 1, 2].map(i => (inp.tps || [])[i]).map((v, i) => {
+      if (v == null) return null;
+      if (!Number.isFinite(v) || v <= 0) { invalid.push('tp' + (i + 1)); return null; }
+      return v;
+    });
+
+    // Warnings we can give even before everything is filled in
+    if (good.riskPct && inp.riskPct > RISK_LIMIT_PCT) warnings.push({ code: 'HIGH_RISK', riskPct: inp.riskPct });
+    const stopWrong = good.entry && good.stop && !stopIsOnRightSide(inp.side, inp.entry, inp.stop);
+    if (stopWrong) warnings.push({ code: 'STOP_WRONG_SIDE', side: inp.side, entry: inp.entry, stop: inp.stop });
+
+    const sortW = () => warnings.sort((a, b) => WARNING_ORDER.indexOf(a.code) - WARNING_ORDER.indexOf(b.code));
+    if (missing.length || invalid.length) return { status: 'incomplete', missing, invalid, warnings: sortW() };
+    if (stopWrong) return { status: 'blocked', missing, invalid, warnings: sortW() };
+
+    const fee = inp.feePct / 100, mmr = inp.mmrPct / 100;
+    const riskAmount = inp.balance * inp.riskPct / 100;
+    const qty = riskAmount / lossPerCoin(inp.side, inp.entry, inp.stop, fee);
+    const r = evaluate({ side: inp.side, entry: inp.entry, stop: inp.stop, tps, qty,
+                         leverage: inp.leverage, fee, mmr, balance: inp.balance });
+
+    if (r.liqBeforeStop) warnings.push({ code: 'LIQ_BEFORE_STOP', liquidation: r.liquidation, stop: inp.stop });
+    if (r.notEnoughBalance) warnings.push({ code: 'NOT_ENOUGH_BALANCE', margin: r.margin, openFee: r.openFee, minLeverage: r.minLeverage });
+    for (const tp of r.takeProfits) {
+      if (!tp.rightSide) warnings.push({ code: 'TP_WRONG_SIDE', n: tp.n, price: tp.price });
+      else if (tp.rrAfterFees < MIN_RR) warnings.push({ code: 'LOW_RR', n: tp.n, rr: tp.rrAfterFees });
+    }
+    return Object.assign({ status: 'ok', missing, invalid, riskAmount, warnings: sortW() }, r);
+  }
+
+  return { RISK_LIMIT_PCT, MIN_RR, parseNumber, lossPerCoin, closeAt, breakevenPrice,
+           liquidationPrice, evaluate, calculate };
+})();
+
+/* =====================================================================
+   2. SELF-TEST — open this file with "#test" at the end of the address.
+      Expected numbers were worked out separately (Python), not by this code.
+   ===================================================================== */
+function runSelfTest() {
+  const M = FuturesMath, rows = [];
+  let group = '';
+  const section = name => { group = name; rows.push({ header: name }); };
+  const near = (name, got, want, tol) =>
+    rows.push({ group, name, got, want: want + ' ± ' + tol, pass: Number.isFinite(got) && Math.abs(got - want) <= tol });
+  const is = (name, got, want) => rows.push({ group, name, got, want, pass: Object.is(got, want) });
+  const codes = res => res.warnings.map(w => w.code).join(',') || 'none';
+  const base = { side: 'long', balance: 1000, riskPct: 1, entry: 100, stop: 95, tps: [110, null, null],
+                 leverage: 10, feePct: 0.1, mmrPct: 0.5 };
+  const calc = changes => M.calculate(Object.assign({}, base, changes));
+
+  section('A. Your real trade — SHORT, position 1772 USDT, entry 66783.9, stop 67255, TP 65800, 7x, fee 0.02%');
+  const a = M.evaluate({ side: 'short', entry: 66783.9, stop: 67255, tps: [65800], qty: 1772 / 66783.9,
+                         leverage: 7, fee: 0.0002, mmr: 0.005, balance: null });
+  const a1 = a.takeProfits[0];
+  near('Position size (USDT)', a.positionUsdt, 1772, 1e-9);
+  near('Coins', a.qty, 0.02653334, 1e-8);
+  near('Loss at stop from price move — you expected ≈ 12.5', a.loss.price, 12.5, 0.05);
+  near('Fees at stop (entry + exit)', a.loss.fees, 0.7113, 0.0005);
+  near('Total loss at stop incl. fees', a.loss.total, 13.2112, 0.0005);
+  near('Profit at TP from price move — you expected ≈ 26', a1.gross, 26, 0.2);
+  near('Profit at TP from price move (exact)', a1.gross, 26.1062, 0.0005);
+  near('Fees at TP (entry + exit)', a1.fees, 0.7036, 0.0005);
+  near('Net profit at TP after fees', a1.net, 25.4026, 0.0005);
+  near('Reward-to-risk before fees — you expected ≈ 2.1', a1.rrBeforeFees, 2.1, 0.05);
+  near('Reward-to-risk before fees (exact)', a1.rrBeforeFees, 2.0885, 0.0001);
+  near('Reward-to-risk after fees', a1.rrAfterFees, 1.9228, 0.0001);
+  near('Margin at 7x', a.margin, 253.1429, 0.0005);
+  near('Breakeven price incl. fees', a.breakeven, 66757.1918, 0.001);
+  near('Liquidation price (approximate)', a.liquidation, 75944.7335, 0.001);
+  is('Liquidation before stop?', a.liqBeforeStop, false);
+
+  section('B. Same trade sized from risk — balance 1321.11 USDT, risk 1%');
+  const b = M.calculate({ side: 'short', balance: 1321.11, riskPct: 1, entry: 66783.9, stop: 67255,
+                          tps: [65800, null, null], leverage: 7, feePct: 0.02, mmrPct: 0.5 });
+  near('Risk amount (USDT)', b.riskAmount, 13.2111, 1e-9);
+  near('Position size ≈ 1772 USDT', b.positionUsdt, 1772, 0.05);
+  near('Loss at stop incl. both fees = chosen risk (difference)', b.loss.total - b.riskAmount, 0, 1e-9);
+  is('Warnings', codes(b), 'none');
+
+  section('C. LONG check — balance 1000, risk 1%, entry 100, stop 95, TP 110, 10x, fee 0.1%');
+  const c = calc({});
+  near('Coins', c.qty, 1.92492782, 1e-8);
+  near('Position size (USDT)', c.positionUsdt, 192.492782, 1e-6);
+  near('Margin at 10x', c.margin, 19.249278, 1e-6);
+  near('Loss at stop incl. fees = 10 USDT (1%)', c.loss.total, 10, 1e-9);
+  near('Net profit at TP', c.takeProfits[0].net, 18.845043, 1e-6);
+  near('Reward-to-risk after fees', c.takeProfits[0].rrAfterFees, 1.884504, 1e-6);
+  near('Reward-to-risk before fees', c.takeProfits[0].rrBeforeFees, 2, 1e-12);
+  near('Breakeven price', c.breakeven, 100.2002, 1e-6);
+  near('Liquidation price (approximate)', c.liquidation, 90.452261, 1e-6);
+  is('Warnings', codes(c), 'none');
+
+  section('D. Warnings');
+  is('LONG, stop 85 below liquidation ≈ 90.45 → liquidation first', codes(calc({ stop: 85, tps: [150] })), 'LIQ_BEFORE_STOP');
+  const d2 = calc({ side: 'short', stop: 115, tps: [50] });
+  near('SHORT 10x liquidation ≈ 109.45', d2.liquidation, 109.4527, 0.0001);
+  is('SHORT, stop 115 above liquidation → liquidation first', codes(d2), 'LIQ_BEFORE_STOP');
+  const d3 = calc({ stop: 105 });
+  is('LONG with stop above entry → status', d3.status, 'blocked');
+  is('LONG with stop above entry → warning', codes(d3), 'STOP_WRONG_SIDE');
+  is('SHORT with stop below entry', codes(calc({ side: 'short', stop: 95, tps: [80] })), 'STOP_WRONG_SIDE');
+  is('Stop equal to entry', codes(calc({ stop: 100 })), 'STOP_WRONG_SIDE');
+  is('Stop wrong side shows even before balance is typed', codes(calc({ stop: 105, balance: null })), 'STOP_WRONG_SIDE');
+  const d4 = calc({ tps: [103, 110, null] });
+  is('TP1 R:R 1.2 flagged, TP2 R:R 2 not', d4.warnings.filter(w => w.code === 'LOW_RR').map(w => w.n).join(','), '1');
+  is('Risk 3% → warning', codes(calc({ riskPct: 3 })), 'HIGH_RISK');
+  is('Risk exactly 2% → no warning', codes(calc({ riskPct: 2 })), 'none');
+  is('Risk 3% shows even before prices are typed', codes(calc({ riskPct: 3, entry: null })), 'HIGH_RISK');
+  is('LONG TP below entry → wrong-side warning (not low R:R)', codes(calc({ tps: [90, null, null] })), 'TP_WRONG_SIDE');
+  const d5 = calc({ balance: 100, riskPct: 2, stop: 99, tps: [103, null, null], leverage: 1, feePct: 0.02 });
+  is('Margin 192 > balance 100 at 1x → warning', codes(d5), 'NOT_ENOUGH_BALANCE');
+  is('Minimum leverage', d5.minLeverage, 2);
+  is('Same trade at 2x → fits', codes(calc({ balance: 100, riskPct: 2, stop: 99, tps: [103, null, null], leverage: 2, feePct: 0.02 })), 'none');
+
+  section('E. Reading typed numbers');
+  is('"66783,9" (comma decimal)', M.parseNumber('66783,9'), 66783.9);
+  is('"66,783.9" (copied from exchange)', M.parseNumber('66,783.9'), 66783.9);
+  is('" 1 772 " (spaces)', M.parseNumber(' 1 772 '), 1772);
+  is('"0,02" (fee)', M.parseNumber('0,02'), 0.02);
+  is('empty box → nothing', M.parseNumber(''), null);
+  is('"abc" → not a number', M.parseNumber('abc'), NaN);
+  is('"-5" → not allowed', M.parseNumber('-5'), NaN);
+
+  const passed = rows.filter(r => r.pass === true).length;
+  const total = rows.filter(r => !r.header).length;
+  return { rows, passed, total };
+}
+
+function showSelfTest() {
+  const el = document.getElementById('selftest');
+  const { rows, passed, total } = runSelfTest();
+  const esc = s => String(s).replace(/[&<>]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[ch]));
+  const show = v => (typeof v === 'number' && Number.isFinite(v) ? +v.toFixed(8) : v);
+  const allOk = passed === total;
+  let html = `<h2>Self-test: <span class="${allOk ? 'pass' : 'fail'}">${passed} / ${total} passed</span></h2>
+    <table><tr><th></th><th>Check</th><th>Got</th><th>Expected</th></tr>`;
+  const out = [];
+  for (const r of rows) {
+    if (r.header) { html += `<tr class="grp"><td colspan="4">${esc(r.header)}</td></tr>`; out.push('--- ' + r.header); continue; }
+    html += `<tr><td class="${r.pass ? 'pass' : 'fail'}">${r.pass ? 'PASS' : 'FAIL'}</td><td>${esc(r.name)}</td><td>${esc(show(r.got))}</td><td>${esc(r.want)}</td></tr>`;
+    out.push(`${r.pass ? 'PASS' : 'FAIL'} | ${r.name} | got ${show(r.got)} | expected ${r.want}`);
+  }
+  el.innerHTML = html + '</table>';
+  el.hidden = false;
+  out.push(`SELFTEST RESULT: ${passed}/${total} passed${allOk ? ' — ALL PASSED' : ''}`);
+  if (typeof window.dump === 'function') window.dump(out.join('\n') + '\n'); // shows in the terminal (run-tests.sh)
+  console.log(out.join('\n'));
+}
+
+function checkHash() { if (location.hash === '#test') { showSelfTest(); document.getElementById('selftest').scrollIntoView(); } }
+window.addEventListener('hashchange', checkHash);
+checkHash();
+</script>
+</body>
+</html>

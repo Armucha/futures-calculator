@@ -54,7 +54,7 @@ maintenance margin rate (default 0.5%).
 
 ## Steps
 - [x] 1. Plan + git repo
-- [ ] 2. Math engine + self-test (test trade from the brief)
+- [x] 2. Math engine + self-test (test trade from the brief) — 53/53 checks pass
 - [ ] 3. Full user interface: inputs, outputs, live updates, dark phone layout
 - [ ] 4. Warnings + remember last inputs
 - [ ] 5. README with formulas in simple words + test results; final check
@@ -75,3 +75,5 @@ Precomputed in Python (fee 0.02%, MMR 0.5%):
 
 ## Log
 - 2026-11-14 — Plan written, repo created.
+- 2026-11-14 — Math engine + built-in self-test (`#test`) + `run-tests.sh`. 53/53 pass.
+  Checked that the test really fails when a formula is broken (removed the exit fee → 7 failures).
