@@ -333,7 +333,7 @@
             <input id="takerPct" type="text" inputmode="decimal" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="next"></label>
         </div>
         <p class="hint" id="feeHint"></p>
-        <p class="hint">Maintenance margin default 0.5%. You can type <b>.</b> or <b>,</b> for decimals — but a comma followed by exactly 3 digits counts as thousands (<b>1,772</b> = 1772; <b>0,025</b> stays 0.025).</p>
+        <p class="hint">Maintenance margin loads MEXC's rate for the coin (BTC 0.1%, ETH 0.1%, SOL 0.23%), used for the liquidation estimate. You can type <b>.</b> or <b>,</b> for decimals — but a comma followed by exactly 3 digits counts as thousands (<b>1,772</b> = 1772; <b>0,025</b> stays 0.025).</p>
       </section>
 
       <details class="card settings" id="cautionSettings">
@@ -431,7 +431,8 @@
         <li><b>Liquidation (approximate, isolated margin)</b> = the price where your loss has eaten the margin
             down to the maintenance margin.<br>
             <span class="eg">LONG: entry × (1 − 1/leverage) ÷ (1 − MMR) &nbsp;·&nbsp; SHORT: entry × (1 + 1/leverage) ÷ (1 + MMR)</span><br>
-            Exchanges add tiers and fees, so the real price differs a little. Keep your stop well before it.</li>
+            MMR = maintenance margin rate: MEXC's first-tier rate for the coin (BTC 0.1%, ETH 0.1%, SOL 0.23%) unless you
+            change it. Exchanges add tiers and fees, so the real price differs a little. Keep your stop well before it.</li>
         <li><b>Minimum leverage</b> (only when margin doesn't fit) = position ÷ (balance − opening fee), rounded up.</li>
         <li><b>Cautions (amber)</b> are advice, not errors:
             <b>tight stop</b> = stop distance ÷ entry is below the minimum for the coin picked under Live price
@@ -1048,6 +1049,10 @@ function runSelfTest() {
   is('Live price message also gives bid and ask', `${q.bid} / ${q.ask}`, '65459.4 / 65459.5');
   is('Market entry: LONG buys at the ask, SHORT sells at the bid', `${marketPrice('long', q)} / ${marketPrice('short', q)}`,
      '65459.5 / 65459.4');
+  is('MEXC profile: maintenance margin BTC / ETH / SOL (%)', ['BTC_USDT', 'ETH_USDT', 'SOL_USDT'].map(c => EXCHANGES.MEXC.coins[c].mmrPct).join(' / '), '0.1 / 0.1 / 0.23');
+  near('Liquidation of your SHORT at 7x with MEXC\'s BTC rate 0.1% (was 75,944.73 with 0.5%)',
+       M.liquidationPrice('short', 66783.9, 7, 0.001), 76248.2089, 0.0001);
+  near('SOL LONG 100 at 10x with SOL rate 0.23%', M.liquidationPrice('long', 100, 10, 0.0023), 90.207477, 1e-6);
   is('MEXC profile: BTC / ETH / SOL standard fees (maker / taker %)', ['BTC_USDT', 'ETH_USDT', 'SOL_USDT']
      .map(c => `${EXCHANGES.MEXC.coins[c].makerPct}/${EXCHANGES.MEXC.coins[c].takerPct}`).join(' · '), '0.01/0.04 · 0/0.02 · 0/0.02');
 
@@ -1173,7 +1178,7 @@ const h = (tag, cls, text) => { const e = document.createElement(tag); if (cls) 
 
 const FIELDS = ['balance', 'available', 'riskPct', 'availPct', 'leverage', 'openRisk', 'entry', 'stop', 'tp1', 'tp2', 'tp3',
                 'makerPct', 'takerPct', 'mmrPct'];
-const DEFAULTS = { mmrPct: '0.5', minStopBTC: '0.30', minStopETH: '0.40', minStopSOL: '0.60', maxOpenRiskPct: '5' };
+const DEFAULTS = { minStopBTC: '0.30', minStopETH: '0.40', minStopSOL: '0.60', maxOpenRiskPct: '5' };
 // Caution settings: the box that holds the minimum stop distance for each coin.
 const CAUTION_FIELDS = { BTC_USDT: 'minStopBTC', ETH_USDT: 'minStopETH', SOL_USDT: 'minStopSOL' };
 const minStopOk = v => v >= 0 && v < 100;
@@ -1194,8 +1199,9 @@ function sizeMode() { const r = document.querySelector('input[name="sizeMode"]:c
    (https://contract.mexc.com/api/v1/contract/detail?symbol=BTC_USDT), fetched with curl on 2026-11-14 and stored
    here, because the page itself does not call that API.
      contractSize = coins per contract   minVol = smallest order (contracts)   volStep = API "volUnit" (contracts)
-     priceStep    = API "priceUnit" (tick size)
-   Contract details came back the same on every request. The fee fields did NOT: on 2026-11-14 the API answered
+     priceStep    = API "priceUnit" (tick size)       mmrPct = API "maintenanceMarginRate" × 100 (first tier)
+   Contract details and the maintenance margin rate came back the same on every request (5 requests on 2026-11-14).
+   MEXC raises the rate only for very big positions (risk limit above riskBaseVol: BTC 19,000,000 contracts = 1,900 BTC). The fee fields did NOT: on 2026-11-14 the API answered
    BTC 0.01%/0.04% or 0%/0.02%, SOL 0%/0.01% or 0%/0.02% (maker/taker) on different requests. The highest seen is used,
    so a trade is never sized with fees that are too low; check your real fee on MEXC and type it on the page. */
 const EXCHANGES = {
@@ -1203,9 +1209,9 @@ const EXCHANGES = {
     name: 'MEXC',
     fetched: '2026-11-14',
     coins: {
-      BTC_USDT: { makerPct: 0.01, takerPct: 0.04, contractSize: 0.0001, minVol: 1, volStep: 1, priceStep: 0.1 },
-      ETH_USDT: { makerPct: 0,    takerPct: 0.02, contractSize: 0.01,   minVol: 1, volStep: 1, priceStep: 0.01 },
-      SOL_USDT: { makerPct: 0,    takerPct: 0.02, contractSize: 0.1,    minVol: 1, volStep: 1, priceStep: 0.01 },
+      BTC_USDT: { makerPct: 0.01, takerPct: 0.04, mmrPct: 0.1,  contractSize: 0.0001, minVol: 1, volStep: 1, priceStep: 0.1 },
+      ETH_USDT: { makerPct: 0,    takerPct: 0.02, mmrPct: 0.1,  contractSize: 0.01,   minVol: 1, volStep: 1, priceStep: 0.01 },
+      SOL_USDT: { makerPct: 0,    takerPct: 0.02, mmrPct: 0.23, contractSize: 0.1,    minVol: 1, volStep: 1, priceStep: 0.01 },
     },
   },
 };
@@ -1220,18 +1226,20 @@ function contractFor(exchange, coin) {
   return p && p.contractSize > 0 ? Object.assign({ exchange: ex.name, coin }, p) : null;
 }
 
-// Put the selected coin's fees in the boxes: what you typed for it before, or the exchange's standard fees.
+// Put the selected coin's fees and maintenance margin rate in the boxes: what you typed for that coin before,
+// or the exchange's numbers (maintenance margin falls back to 0.5% for a coin the profile doesn't know).
 function loadCoinFees() {
   const p = EXCHANGES[exchangeId()].coins[currentCoin()] || {};
   const mine = (feeEdits[exchangeId()] || {})[currentCoin()] || {};
   const pick = (typed, std) => (typeof typed === 'string' && typed.trim() !== '' ? typed : std != null ? String(std) : '');
   $('makerPct').value = pick(mine.maker, p.makerPct);
   $('takerPct').value = pick(mine.taker, p.takerPct);
+  $('mmrPct').value = pick(mine.mmr, p.mmrPct != null ? p.mmrPct : 0.5);
 }
 function rememberCoinFees() {
   const ex = exchangeId();
   if (!feeEdits[ex] || typeof feeEdits[ex] !== 'object') feeEdits[ex] = {};
-  feeEdits[ex][currentCoin()] = { maker: $('makerPct').value, taker: $('takerPct').value };
+  feeEdits[ex][currentCoin()] = { maker: $('makerPct').value, taker: $('takerPct').value, mmr: $('mmrPct').value };
 }
 // Fee per leg { entry, stop, tp } from the maker/taker boxes and the order settings, or null if a box is unreadable.
 function currentFees() {
@@ -1245,7 +1253,8 @@ function feeSourceText() {
   const base = coin.split('_')[0];
   return `${coin} on ${ex.name}: default maker ${p.makerPct}%, taker ${p.takerPct}% — ${ex.name}'s contract data gave different ` +
          `fees on different requests (${ex.fetched}), so this is the highest seen. Check your real fee on ${ex.name} and type it ` +
-         `here (remembered for each coin). Contract: 1 = ${p.contractSize} ${base}, minimum ${p.minVol}, price step ${p.priceStep}.`;
+         `here (remembered for each coin). Maintenance margin ${p.mmrPct}% is ${ex.name}'s first-tier rate for ${base}. ` +
+         `Contract: 1 = ${p.contractSize} ${base}, minimum ${p.minVol}, price step ${p.priceStep}.`;
 }
 function feeLegsText() {
   const f = currentFees();
@@ -1732,7 +1741,7 @@ function onFormEdit(e) {
   const t = e.target;
   if (t && t.name === 'tpMode') onTpModeChange();
   else if (t && calculatedIds().includes(t.id)) setTpMode('manual');   // you typed in a calculated box: keep your number
-  if (t && (t.id === 'makerPct' || t.id === 'takerPct')) rememberCoinFees();
+  if (t && (t.id === 'makerPct' || t.id === 'takerPct' || t.id === 'mmrPct')) rememberCoinFees();
   if (t && (t.name === 'symbol' || t.name === 'side' || t.name === 'orderType' || t.id === 'exchange')) {
     const wasLive = $('entry').classList.contains('auto') || $('entry').classList.contains('frozen');
     frozen = null;                                                      // a frozen price belongs to one coin and side

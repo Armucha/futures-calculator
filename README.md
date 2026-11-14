@@ -49,7 +49,9 @@ local files. The calculator still works; it just starts empty each time.
    Live price: BTC 0.01% / 0.04%, ETH 0% / 0.02%, SOL 0% / 0.02%, from MEXC's contract data, fetched 2026-11-14.
    **Check your real fee on MEXC.** The API returned different fee numbers on different requests that day, e.g. BTC
    0.01/0.04 or 0/0.02, so the defaults are the highest seen. Type your own; edits are remembered for each coin.
-   Maintenance margin rate defaults to 0.5%.
+   The **maintenance margin rate** (used for the liquidation estimate) also loads per coin from MEXC's contract data:
+   BTC 0.1%, ETH 0.1%, SOL 0.23% (MEXC's first tier, the same on every request; it only rises for positions above
+   1,900 BTC). Edits are remembered for each coin. A coin without MEXC data falls back to 0.5%.
 4. **Order:** **Market** — Entry follows the live price by itself (the **ask** for a LONG, the **bid** for a SHORT)
    and can't be typed in; opening fee = taker. If live prices are down, you can type the entry, and an amber note
    says so. **Limit** — you type the entry; opening fee = maker.
@@ -131,7 +133,7 @@ balance, you get the red warning instead of the amber one. The 5% open-risk limi
 | Stop loss from a take profit + ratio R | P = (TP − entry) × d − entry fee × entry − TP fee × TP, L = P ÷ R<br>LONG: (entry × (1 + entry fee) − L) ÷ (1 − stop fee)<br>SHORT: (entry × (1 − entry fee) + L) ÷ (1 + stop fee) | The reverse of the row below: profit per coin at TP after fees (P), divided by R, is the loss per coin you accept (L). d = +1 LONG, −1 SHORT. Rounded slightly towards entry, in your favour. |
 | Take profit from a ratio R | LONG: (entry × (1 + entry fee) + R × loss per coin) ÷ (1 − TP fee)<br>SHORT: (entry × (1 − entry fee) − R × loss per coin) ÷ (1 + TP fee) | The price where profit after both fees = R × loss at the stop after fees. Shown rounded slightly in your favour, so the ratio is never below the one you picked. |
 | Breakeven | LONG: entry × (1 + entry fee) ÷ (1 − taker)<br>SHORT: entry × (1 − entry fee) ÷ (1 + taker) | The price where the move exactly pays both fees, if you close with a stop or market order (taker) — like a stop moved to breakeven. |
-| Liquidation (approx.) | LONG: entry × (1 − 1/leverage) ÷ (1 − MMR)<br>SHORT: entry × (1 + 1/leverage) ÷ (1 + MMR) | The price where your loss has eaten the margin down to the maintenance margin. Isolated margin, simplified. |
+| Liquidation (approx.) | LONG: entry × (1 − 1/leverage) ÷ (1 − MMR)<br>SHORT: entry × (1 + 1/leverage) ÷ (1 + MMR) | The price where your loss has eaten the margin down to the maintenance margin. Isolated margin, simplified. MMR = the coin's MEXC rate (BTC 0.1%, ETH 0.1%, SOL 0.23%). Example: your SHORT 66783.9 at 7x ≈ 76,248.21 with 0.1% (75,944.73 with the old 0.5%). |
 | Minimum leverage | position ÷ (balance − opening fee), rounded up | Shown only when the margin doesn't fit in your balance. |
 
 ### Worked example: your test trade
@@ -160,7 +162,7 @@ To make the calculator size exactly this trade, enter **balance 1321.11** and **
 | Position (balance 1321.11, risk 1%) | ≈ 1772 | **1,771.99 USDT** | ✅ |
 | Loss at stop incl. fees = chosen risk | exactly | difference **0.000000000** | ✅ |
 
-The self-test has 192 checks in total: your trade, a LONG trade, every warning,
+The self-test has 205 checks in total: your trade, a LONG trade, every warning,
 number reading (`66783,9`, `66,783.9`, `1,772` = 1772, `0,025` = 0.025, spaces), remembering inputs, reading MEXC messages
 (real samples, plus broken, negative and wrong-coin messages), take profit from a ratio, stop loss from a
 take profit, the amber cautions, being in a trade already (Available, risk already open), and exchange fees

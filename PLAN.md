@@ -269,6 +269,12 @@ Stage 3 — sizing mode:
    risk % / HIGH_RISK use the real loss. Log: self-test 202/202 (+10); screen: BTC 261 contracts everywhere, SOL 0
    + red warning; fixed "−0.00" for a zero loss and shortened the Position tile text for phones.
 
+3. **Maintenance margin per coin**: MEXC's contract data has `maintenanceMarginRate` — fetched 5× with curl
+   (2026-11-14 18:22 UTC), the same every time: BTC 0.1%, ETH 0.1%, SOL 0.23% (first tier; MEXC raises it only above
+   riskBaseVol, e.g. 1,900 BTC). Stored as `mmrPct` in the profile; the MMR box loads it per coin like the fees (edits
+   remembered per coin; 0.5% fallback for coins without data). Your SHORT at 7x: liquidation ≈ 76,248.21 (was 75,944.73).
+   Log: self-test 205/205; browser: per-coin box values, SOL edit remembered, survives reload.
+
 ## Ideas for later (not built)
 - Split the position across TP1/TP2/TP3 (e.g. 50/30/20%) and show the blended result
 - Round the coin amount to the exchange's step size
