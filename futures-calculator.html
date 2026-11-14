@@ -77,6 +77,14 @@
   .seg input:checked + label { border-color:var(--accent); color:var(--text); background:rgba(88,166,255,.14); }
   .seg input:focus-visible + label { outline:3px solid var(--accent); outline-offset:2px; }
   .hint.warn { color:var(--red); font-weight:600; }
+  .hint.caution { color:var(--amber-text); font-weight:600; }
+  #orderHint { margin:-2px 0 10px; }
+  #feeLegsHint { margin:4px 0 12px; }
+  .check { display:flex; align-items:center; gap:10px; font-size:.92rem; cursor:pointer; }
+  .check input { width:20px; height:20px; margin:0; accent-color:var(--accent); }
+  .field select { width:100%; height:50px; padding:0 10px; font:inherit; font-size:1.05rem; color:var(--text);
+                  background:var(--input); border:1px solid var(--line2); border-radius:10px; }
+  .field select:focus { outline:none; border-color:var(--accent); box-shadow:0 0 0 3px rgba(88,166,255,.25); }
   .chips-tp label { height:auto; min-height:40px; padding:4px 6px; text-align:center; line-height:1.15; font-size:.84rem; }
   .custom-r { margin-top:10px; max-width:200px; }
   .field input.auto { color:var(--accent); border-style:dashed; }
@@ -223,6 +231,7 @@
         <div class="live-row">
           <div class="live-left">
             <div class="live-price stale" id="livePrice">—</div>
+            <div class="sub" id="liveQuote"></div>
             <div class="sub" id="liveAge">Connecting to MEXC…</div>
           </div>
           <button type="button" class="btn-primary" id="useLive" disabled>Use live price</button>
@@ -235,6 +244,12 @@
           <input type="radio" name="side" id="side-long" value="long" checked><label for="side-long">LONG</label>
           <input type="radio" name="side" id="side-short" value="short"><label for="side-short">SHORT</label>
         </div>
+        <div class="seg" role="radiogroup" aria-label="Order type">
+          <span class="seg-lbl">Order:</span>
+          <input type="radio" name="orderType" id="ot-market" value="market" checked><label for="ot-market">Market</label>
+          <input type="radio" name="orderType" id="ot-limit" value="limit"><label for="ot-limit">Limit</label>
+        </div>
+        <p class="hint" id="orderHint"></p>
         <div class="row cols-2">
           <label class="field"><span>Entry price</span>
             <input id="entry" type="text" inputmode="decimal" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="next"></label>
@@ -249,6 +264,8 @@
           <label class="field"><span>TP 3</span>
             <input id="tp3" type="text" inputmode="decimal" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="next" placeholder="optional"></label>
         </div>
+        <label class="check"><input type="checkbox" id="tpLimit"> TP as limit order (maker fee at the take profit)</label>
+        <p class="hint" id="feeLegsHint"></p>
         <div class="tp-mode">
           <div class="seg" role="radiogroup" aria-label="What to calculate">
             <span class="seg-lbl">Calculate:</span>
@@ -271,14 +288,20 @@
       </section>
 
       <section class="card">
-        <h2>Exchange fees</h2>
+        <h2>Exchange</h2>
         <div class="row cols-2">
-          <label class="field"><span>Taker fee (%)</span>
-            <input id="feePct" type="text" inputmode="decimal" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="next"></label>
+          <label class="field"><span>Exchange</span><select id="exchange"></select></label>
           <label class="field"><span>Maint. margin (%)</span>
             <input id="mmrPct" type="text" inputmode="decimal" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="done"></label>
         </div>
-        <p class="hint">Defaults: taker fee 0.02%, maintenance margin 0.5%. Change them to match your exchange. You can type <b>.</b> or <b>,</b> for decimals — but a comma followed by exactly 3 digits counts as thousands (<b>1,772</b> = 1772; <b>0,025</b> stays 0.025).</p>
+        <div class="row cols-2">
+          <label class="field"><span>Maker fee (%)</span>
+            <input id="makerPct" type="text" inputmode="decimal" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="next"></label>
+          <label class="field"><span>Taker fee (%)</span>
+            <input id="takerPct" type="text" inputmode="decimal" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="next"></label>
+        </div>
+        <p class="hint" id="feeHint"></p>
+        <p class="hint">Maintenance margin default 0.5%. You can type <b>.</b> or <b>,</b> for decimals — but a comma followed by exactly 3 digits counts as thousands (<b>1,772</b> = 1772; <b>0,025</b> stays 0.025).</p>
       </section>
 
       <details class="card settings" id="cautionSettings">
@@ -332,7 +355,10 @@
             <span class="eg">1,000 USDT × 1% = 10 USDT you accept to lose.</span></li>
         <li><b>Loss per coin at the stop</b> = how far the price moves from entry to stop
             + the entry fee + the exit fee. A fee is the price × the fee rate
-            (you pay it when you open <i>and</i> when you close).</li>
+            (you pay it when you open <i>and</i> when you close).<br>
+            <span class="eg">Which fee: opening = <b>taker</b> for a Market order, <b>maker</b> for a Limit order;
+            closing at the stop = <b>taker</b> (a stop fills as a market order); closing at a TP = <b>taker</b>,
+            or <b>maker</b> with "TP as limit order".</span></li>
         <li><b>Coins</b> = risk in USDT ÷ loss per coin. <b>Position size (USDT)</b> = coins × entry price.<br>
             <span class="eg">Because fees are inside step 2, the loss at the stop, fees included, is exactly your risk.</span></li>
         <li><b>Margin</b> = position size ÷ leverage. Leverage does <i>not</i> change how many USDT you win or lose —
@@ -346,19 +372,20 @@
         <li><b>Take profit from a ratio</b> (1.5R, 2R, 3R, Custom, Ladder) = the price where your profit
             <i>after both fees</i> is exactly R times your loss at the stop (also after fees). Because you pay a fee
             on the way out too, the TP sits a little further away than "R × the stop distance".<br>
-            <span class="eg">LONG: TP = (entry × (1 + fee) + R × loss per coin) ÷ (1 − fee) &nbsp;·&nbsp;
-            SHORT: TP = (entry × (1 − fee) − R × loss per coin) ÷ (1 + fee)</span><br>
+            <span class="eg">LONG: TP = (entry × (1 + entry fee) + R × loss per coin) ÷ (1 − TP fee) &nbsp;·&nbsp;
+            SHORT: TP = (entry × (1 − entry fee) − R × loss per coin) ÷ (1 + TP fee)</span><br>
             <span class="eg">"Loss per coin" is from step 2. The box shows the TP rounded slightly in your favour,
             so the ratio is never below the one you picked.</span></li>
         <li><b>Stop loss from a take profit</b> ("Stop from TP" + a ratio) is the same idea backwards. First the profit per
             coin at TP 1 after both fees: <i>P</i> = distance from entry to TP − entry fee − exit fee. You accept a loss of
             <i>L</i> = P ÷ R per coin. The stop is the price where the loss per coin, fees included, is exactly L.<br>
-            <span class="eg">LONG: stop = (entry × (1 + fee) − L) ÷ (1 − fee) &nbsp;·&nbsp;
-            SHORT: stop = (entry × (1 − fee) + L) ÷ (1 + fee)</span><br>
+            <span class="eg">LONG: stop = (entry × (1 + entry fee) − L) ÷ (1 − stop fee) &nbsp;·&nbsp;
+            SHORT: stop = (entry × (1 − entry fee) + L) ÷ (1 + stop fee)</span><br>
             <span class="eg">If TP 1 is on the wrong side, or so close that the fees eat the profit, there is no such stop —
             you get a red warning instead. The stop is rounded slightly towards the entry, in your favour.</span></li>
-        <li><b>Breakeven</b> = the price where the price move exactly pays both fees.<br>
-            <span class="eg">LONG: entry × (1 + fee) ÷ (1 − fee) &nbsp;·&nbsp; SHORT: entry × (1 − fee) ÷ (1 + fee)</span></li>
+        <li><b>Breakeven</b> = the price where the price move exactly pays both fees, if you close with a stop or
+            market order (taker) — like when a stop moved to breakeven is hit.<br>
+            <span class="eg">LONG: entry × (1 + entry fee) ÷ (1 − taker) &nbsp;·&nbsp; SHORT: entry × (1 − entry fee) ÷ (1 + taker)</span></li>
         <li><b>Liquidation (approximate, isolated margin)</b> = the price where your loss has eaten the margin
             down to the maintenance margin.<br>
             <span class="eg">LONG: entry × (1 − 1/leverage) ÷ (1 − MMR) &nbsp;·&nbsp; SHORT: entry × (1 + 1/leverage) ÷ (1 + MMR)</span><br>
@@ -422,23 +449,39 @@ const FuturesMath = (() => {
     return Number(s);
   }
 
+  // Fees per leg of a trade, as fractions: { entry, stop, tp } — the fee to open, to close at the stop,
+  // and to close at a take profit. A single number means the same fee on every leg.
+  const feeLegsOf = fee => (typeof fee === 'number' ? { entry: fee, stop: fee, tp: fee } : fee);
+
+  // Which fee applies where: entry = taker for a Market order, maker for a Limit order;
+  // closing at the stop = taker (a stop fills as a market order);
+  // closing at a TP = taker, or maker when the TP is a limit order.
+  function feeLegs(makerPct, takerPct, orderType, tpLimit) {
+    return { entry: (orderType === 'limit' ? makerPct : takerPct) / 100,
+             stop: takerPct / 100,
+             tp: (tpLimit ? makerPct : takerPct) / 100 };
+  }
+
   // Money lost per 1 coin if the stop is hit: the price move against us,
-  // plus the entry fee, plus the exit fee.
+  // plus the entry fee (on the entry price), plus the exit fee (on the stop price).
   function lossPerCoin(side, entry, stop, fee) {
-    return (entry - stop) * dir(side) + fee * (entry + stop);
+    const f = feeLegsOf(fee);
+    return (entry - stop) * dir(side) + f.entry * entry + f.stop * stop;
   }
 
   // Result of closing `qty` coins at the `exit` price.
-  function closeAt(side, entry, exit, qty, fee) {
-    const gross = (exit - entry) * dir(side) * qty;  // from the price move
-    const fees = fee * qty * (entry + exit);         // entry fee + exit fee
+  function closeAt(side, entry, exit, qty, feeEntry, feeExit = feeEntry) {
+    const gross = (exit - entry) * dir(side) * qty;          // from the price move
+    const fees = qty * (feeEntry * entry + feeExit * exit);  // entry fee + exit fee
     return { gross, fees, net: gross - fees };
   }
 
-  // Price where closing the trade gives exactly 0 after both fees.
+  // Price where closing the trade gives exactly 0 after both fees — closing like a stop
+  // (exit fee = the stop fee, e.g. when a stop moved to breakeven is hit).
+  //   LONG: entry × (1 + entry fee) ÷ (1 − exit fee)    SHORT: entry × (1 − entry fee) ÷ (1 + exit fee)
   function breakevenPrice(side, entry, fee) {
-    const d = dir(side);
-    return entry * (1 + d * fee) / (1 - d * fee);
+    const f = feeLegsOf(fee);
+    return side === 'short' ? entry * (1 - f.entry) / (1 + f.stop) : entry * (1 + f.entry) / (1 - f.stop);
   }
 
   // Approximate isolated-margin liquidation price: the price where your margin,
@@ -452,60 +495,67 @@ const FuturesMath = (() => {
   const stopIsOnRightSide = (side, entry, stop) => (entry - stop) * dir(side) > 0;
   const tpIsOnRightSide = (side, entry, tp) => (tp - entry) * dir(side) > 0;
 
+  const feesOk = f => [f.entry, f.stop, f.tp].every(x => x >= 0 && x < 1);
+
   // Take profit for a chosen reward-to-risk R, AFTER fees: the price where the profit after both
   // fees is exactly R × the loss at the stop after both fees. L = lossPerCoin (fees included).
-  //   LONG:  TP = (entry × (1 + fee) + R × L) ÷ (1 − fee)
-  //   SHORT: TP = (entry × (1 − fee) − R × L) ÷ (1 + fee)
+  //   LONG:  TP = (entry × (1 + entry fee) + R × L) ÷ (1 − TP fee)
+  //   SHORT: TP = (entry × (1 − entry fee) − R × L) ÷ (1 + TP fee)
+  // `fee` is one number (same on every leg) or { entry, stop, tp }.
   // Returns NaN if it can't be done (stop on the wrong side, R not above 0). A SHORT with a big R
   // can come out at or below 0 — the caller treats that as impossible.
   function takeProfitForR(side, entry, stop, fee, R) {
-    if (!stopIsOnRightSide(side, entry, stop) || !(R > 0) || !(fee >= 0 && fee < 1)) return NaN;
-    const L = lossPerCoin(side, entry, stop, fee);
+    const f = feeLegsOf(fee);
+    if (!stopIsOnRightSide(side, entry, stop) || !(R > 0) || !feesOk(f)) return NaN;
+    const L = lossPerCoin(side, entry, stop, f);
     return side === 'short'
-      ? (entry * (1 - fee) - R * L) / (1 + fee)
-      : (entry * (1 + fee) + R * L) / (1 - fee);
+      ? (entry * (1 - f.entry) - R * L) / (1 + f.tp)
+      : (entry * (1 + f.entry) + R * L) / (1 - f.tp);
   }
 
   // The reverse: stop loss for a chosen R, AFTER fees, from entry + take profit.
-  //   P = net profit per coin at TP (after both fees) = (TP − entry) × d − fee × (entry + TP)
+  //   P = net profit per coin at TP = (TP − entry) × d − entry fee × entry − TP fee × TP
   //   L = P ÷ R  = the loss per coin at the stop we can accept (fees included)
-  //   LONG:  stop = (entry × (1 + fee) − L) ÷ (1 − fee)
-  //   SHORT: stop = (entry × (1 − fee) + L) ÷ (1 + fee)
+  //   LONG:  stop = (entry × (1 + entry fee) − L) ÷ (1 − stop fee)
+  //   SHORT: stop = (entry × (1 − entry fee) + L) ÷ (1 + stop fee)
   // Returns { stop } — or { error } when there is no such stop:
   //   TP_WRONG_SIDE   TP is not on the profit side of entry
   //   TP_NO_PROFIT    TP is on the right side but too close to pay both fees (P ≤ 0)
   //   TP_TOO_CLOSE    even a stop right at entry loses more than P ÷ R (both fees) → no stop fits
   //   STOP_BELOW_ZERO a LONG would need a stop at or below 0
   function stopForR(side, entry, tp, fee, R) {
-    if (!(entry > 0) || !(tp > 0) || !(R > 0) || !(fee >= 0 && fee < 1)) return { error: 'BAD_INPUT' };
+    const f = feeLegsOf(fee);
+    if (!(entry > 0) || !(tp > 0) || !(R > 0) || !feesOk(f)) return { error: 'BAD_INPUT' };
     if (!tpIsOnRightSide(side, entry, tp)) return { error: 'TP_WRONG_SIDE' };
-    const P = (tp - entry) * dir(side) - fee * (entry + tp);
+    const P = (tp - entry) * dir(side) - f.entry * entry - f.tp * tp;
     if (!(P > 0)) return { error: 'TP_NO_PROFIT' };
     const L = P / R;
     const stop = side === 'short'
-      ? (entry * (1 - fee) + L) / (1 + fee)
-      : (entry * (1 + fee) - L) / (1 - fee);
+      ? (entry * (1 - f.entry) + L) / (1 + f.stop)
+      : (entry * (1 + f.entry) - L) / (1 - f.stop);
     if (!stopIsOnRightSide(side, entry, stop)) return { error: 'TP_TOO_CLOSE' };
     if (!(stop > 0)) return { error: 'STOP_BELOW_ZERO' };
     return { stop };
   }
 
   // Everything about a trade once the number of coins is known.
-  // t = { side, entry, stop, tps:[...], qty, leverage, fee, mmr, balance (or null) }
+  // t = { side, entry, stop, tps:[...], qty, leverage, fees {entry, stop, tp} (or fee: one number),
+  //       mmr, balance (or null), available (or null) }
   function evaluate(t) {
     const d = dir(t.side);
+    const f = feeLegsOf(t.fees || t.fee);
     const positionUsdt = t.qty * t.entry;
     const margin = positionUsdt / t.leverage;
-    const openFee = positionUsdt * t.fee;
+    const openFee = positionUsdt * f.entry;
 
-    const s = closeAt(t.side, t.entry, t.stop, t.qty, t.fee);
+    const s = closeAt(t.side, t.entry, t.stop, t.qty, f.entry, f.stop);
     const loss = { price: -s.gross, fees: s.fees, total: -s.net };
     const stopDistance = (t.entry - t.stop) * d;
 
     const takeProfits = [];
     (t.tps || []).forEach((price, i) => {
       if (price == null) return;
-      const r = closeAt(t.side, t.entry, price, t.qty, t.fee);
+      const r = closeAt(t.side, t.entry, price, t.qty, f.entry, f.tp);
       takeProfits.push({
         n: i + 1, price, gross: r.gross, fees: r.fees, net: r.net,
         rightSide: tpIsOnRightSide(t.side, t.entry, price),
@@ -530,7 +580,7 @@ const FuturesMath = (() => {
     return {
       qty: t.qty, positionUsdt, margin, openFee, loss, stopDistance,
       stopDistancePct: stopDistance / t.entry * 100,
-      takeProfits, breakeven: breakevenPrice(t.side, t.entry, t.fee),
+      takeProfits, breakeven: breakevenPrice(t.side, t.entry, f), fees: f,
       liquidation, liqBeforeStop, notEnoughBalance, minLeverage,
       feeSharePct: loss.fees / loss.total * 100,                               // fees as % of the loss at the stop
       marginSharePct: funds != null ? margin / funds * 100 : null,             // margin as % of available (or balance)
@@ -546,13 +596,19 @@ const FuturesMath = (() => {
   //         coin ('BTC_USDT' …, optional), minStopPct (optional; default per coin),
   //         available (optional: free money for margin), openRisk (optional: USDT already at risk in open trades),
   //         maxOpenRiskPct (optional; default 5) }
+  // Fees: makerPct + takerPct + orderType ('market' | 'limit') + tpLimit (true = TP is a limit order),
+  //       or feePct = one fee for every leg (older callers and tests).
   // Empty boxes are null, unreadable ones NaN.
   // Returns red `warnings` (real problems) and amber `cautions` (advice) separately.
   function calculate(inp) {
     const missing = [], invalid = [], warnings = [];
+    const oneFee = 'feePct' in inp;
+    const feeRule = v => v >= 0 && v < 10;
     const rules = {
       balance: v => v > 0, riskPct: v => v > 0 && v <= 100, entry: v => v > 0, stop: v => v > 0,
-      leverage: v => v >= 1, feePct: v => v >= 0 && v < 10, mmrPct: v => v >= 0 && v < 100,
+      leverage: v => v >= 1,
+      ...(oneFee ? { feePct: feeRule } : { makerPct: feeRule, takerPct: feeRule }),
+      mmrPct: v => v >= 0 && v < 100,
     };
     const good = {};
     for (const key of Object.keys(rules)) {
@@ -589,11 +645,12 @@ const FuturesMath = (() => {
     if (missing.length || invalid.length) return { status: 'incomplete', missing, invalid, warnings: sortW(), cautions: [] };
     if (stopWrong) return { status: 'blocked', missing, invalid, warnings: sortW(), cautions: [] };
 
-    const fee = inp.feePct / 100, mmr = inp.mmrPct / 100;
+    const fees = oneFee ? feeLegsOf(inp.feePct / 100) : feeLegs(inp.makerPct, inp.takerPct, inp.orderType, inp.tpLimit);
+    const mmr = inp.mmrPct / 100;
     const riskAmount = inp.balance * inp.riskPct / 100;
-    const qty = riskAmount / lossPerCoin(inp.side, inp.entry, inp.stop, fee);
+    const qty = riskAmount / lossPerCoin(inp.side, inp.entry, inp.stop, fees);
     const r = evaluate({ side: inp.side, entry: inp.entry, stop: inp.stop, tps, qty,
-                         leverage: inp.leverage, fee, mmr, balance: inp.balance, available: opt.available });
+                         leverage: inp.leverage, fees, mmr, balance: inp.balance, available: opt.available });
 
     if (r.liqBeforeStop) warnings.push({ code: 'LIQ_BEFORE_STOP', liquidation: r.liquidation, stop: inp.stop });
     if (r.notEnoughBalance) {
@@ -632,7 +689,7 @@ const FuturesMath = (() => {
   }
 
   return { RISK_LIMIT_PCT, MIN_RR, MIN_STOP_PCT, FEE_SHARE_LIMIT_PCT, MARGIN_SHARE_LIMIT_PCT, MAX_OPEN_RISK_PCT, parseNumber, lossPerCoin, closeAt, breakevenPrice,
-           liquidationPrice, takeProfitForR, stopForR, evaluate, calculate };
+           liquidationPrice, takeProfitForR, stopForR, feeLegs, evaluate, calculate };
 })();
 
 /* =====================================================================
@@ -871,6 +928,42 @@ function runSelfTest() {
   is('Limit 0 turns the open-risk caution off', yes(inTrade({ openRisk: 10, maxOpenRiskPct: 0 }), 'OPEN_RISK_HIGH'), 'no');
   is('Open risk empty → no total shown', inTrade({}).totalOpenRisk, null);
 
+  section('L. Exchange fees: Market / Limit entry, TP as limit (LONG 100 / stop 95 / TP 110, maker 0.01%, taker 0.04%)');
+  const feeTrade = { side: 'long', balance: 1000, riskPct: 1, leverage: 10, entry: 100, stop: 95, tps: [110, null, null],
+                     makerPct: 0.01, takerPct: 0.04, mmrPct: 0.5 };
+  const legs = r => [r.fees.entry, r.fees.stop, r.fees.tp].map(x => +(x * 100).toFixed(6) + '%').join(' / ');
+  const lm = M.calculate(Object.assign({}, feeTrade, { orderType: 'market', tpLimit: false }));
+  near('Market, TP taker → coins', lm.qty, 1.969279, 5e-7);
+  near('   net profit at TP', lm.takeProfits[0].net, 19.5274, 5e-5);
+  near('   loss at stop incl. fees = 10.00', lm.loss.total, 10, 1e-9);
+  is('   fees used (open / stop / TP)', legs(lm), '0.04% / 0.04% / 0.04%');
+  const ll = M.calculate(Object.assign({}, feeTrade, { orderType: 'limit', tpLimit: true }));
+  near('Limit, TP maker → coins', ll.qty, 1.980983, 5e-7);
+  near('   net profit at TP', ll.takeProfits[0].net, 19.7682, 5e-5);
+  near('   loss at stop incl. fees = 10.00', ll.loss.total, 10, 1e-9);
+  is('   fees used (open / stop / TP)', legs(ll), '0.01% / 0.04% / 0.01%');
+  near('Breakeven, Market entry (closed like a stop: taker)', lm.breakeven, 100.080032, 1e-6);
+  near('Breakeven, Limit entry', ll.breakeven, 100.050020, 1e-6);
+  const fM = M.feeLegs(0.01, 0.04, 'market', false), fL = M.feeLegs(0.01, 0.04, 'limit', true);
+  const rrFees = (side, e, s, tp, fees) => M.evaluate({ side, entry: e, stop: s, tps: [tp], qty: 1, leverage: 1, fees,
+                                                        mmr: 0.005, balance: null }).takeProfits[0].rrAfterFees;
+  const t2m = M.takeProfitForR('long', 100, 95, fM, 2);
+  near('2R TP, Market + TP taker', t2m, 110.240096, 1e-6);
+  near('   R:R after fees there is exactly 2', rrFees('long', 100, 95, t2m, fM), 2, 1e-9);
+  const t2l = M.takeProfitForR('long', 100, 95, fL, 2);
+  near('2R TP, Limit + TP maker', t2l, 110.117012, 1e-6);
+  near('   "Stop from TP" on that TP gives back stop 95', M.stopForR('long', 100, t2l, fL, 2).stop, 95, 1e-9);
+  const fS = { entry: 0.0004, stop: 0.0004, tp: 0.0001 };
+  const tS = M.takeProfitForR('short', 66783.9, 67255, fS, 1.5);
+  near('SHORT 66783.9 / 67255, 1.5R, Market entry, TP maker → TP', tS, 65963.516748, 1e-6);
+  near('   "Stop from TP" gives back stop 67255', M.stopForR('short', 66783.9, tS, fS, 1.5).stop, 67255, 1e-6);
+  const q = L.parseMessage(push('BTC_USDT'), 'BTC_USDT');
+  is('Live price message also gives bid and ask', `${q.bid} / ${q.ask}`, '65459.4 / 65459.5');
+  is('Market entry: LONG buys at the ask, SHORT sells at the bid', `${marketPrice('long', q)} / ${marketPrice('short', q)}`,
+     '65459.5 / 65459.4');
+  is('MEXC profile: BTC / ETH / SOL standard fees (maker / taker %)', ['BTC_USDT', 'ETH_USDT', 'SOL_USDT']
+     .map(c => `${EXCHANGES.MEXC.coins[c].makerPct}/${EXCHANGES.MEXC.coins[c].takerPct}`).join(' · '), '0.01/0.04 · 0/0.02 · 0/0.01');
+
   const passed = rows.filter(r => r.pass === true).length;
   const total = rows.filter(r => !r.header).length;
   return { rows, passed, total };
@@ -925,8 +1018,9 @@ const Fmt = {
 const $ = id => document.getElementById(id);
 const h = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 
-const FIELDS = ['balance', 'available', 'riskPct', 'leverage', 'openRisk', 'entry', 'stop', 'tp1', 'tp2', 'tp3', 'feePct', 'mmrPct'];
-const DEFAULTS = { feePct: '0.02', mmrPct: '0.5', minStopBTC: '0.30', minStopETH: '0.40', minStopSOL: '0.60', maxOpenRiskPct: '5' };
+const FIELDS = ['balance', 'available', 'riskPct', 'leverage', 'openRisk', 'entry', 'stop', 'tp1', 'tp2', 'tp3',
+                'makerPct', 'takerPct', 'mmrPct'];
+const DEFAULTS = { mmrPct: '0.5', minStopBTC: '0.30', minStopETH: '0.40', minStopSOL: '0.60', maxOpenRiskPct: '5' };
 // Caution settings: the box that holds the minimum stop distance for each coin.
 const CAUTION_FIELDS = { BTC_USDT: 'minStopBTC', ETH_USDT: 'minStopETH', SOL_USDT: 'minStopSOL' };
 const minStopOk = v => v >= 0 && v < 100;
@@ -934,11 +1028,66 @@ const minStopOk = v => v >= 0 && v < 100;
 const SETTING_IDS = [...Object.values(CAUTION_FIELDS), 'maxOpenRiskPct'];
 const LABELS = { balance: 'Balance', available: 'Available', riskPct: 'Risk %', leverage: 'Leverage',
                  openRisk: 'Risk already open', entry: 'Entry price', stop: 'Stop loss',
-                 tp1: 'Take profit 1', tp2: 'TP 2', tp3: 'TP 3', feePct: 'Taker fee', mmrPct: 'Maintenance margin' };
+                 tp1: 'Take profit 1', tp2: 'TP 2', tp3: 'TP 3', makerPct: 'Maker fee', takerPct: 'Taker fee',
+                 mmrPct: 'Maintenance margin' };
 const LIMITS = { balance: 'more than 0', available: '0 or more', riskPct: 'between 0 and 100', leverage: '1 or more',
                  openRisk: '0 or more', entry: 'more than 0',
                  stop: 'more than 0', tp1: 'more than 0', tp2: 'more than 0', tp3: 'more than 0',
-                 feePct: '0 to 10', mmrPct: '0 to 100' };
+                 makerPct: '0 to 10', takerPct: '0 to 10', mmrPct: '0 to 100' };
+
+/* Exchange profiles. To add an exchange, add an entry with the same shape.
+   MEXC numbers are from MEXC's public contract API
+   (https://contract.mexc.com/api/v1/contract/detail?symbol=BTC_USDT), fetched with curl on 2026-11-14 and stored
+   here, because the page itself does not call that API. Fees are MEXC's standard rates; the page lets you edit them. */
+const EXCHANGES = {
+  MEXC: {
+    name: 'MEXC',
+    fetched: '2026-11-14',
+    coins: {
+      BTC_USDT: { makerPct: 0.01, takerPct: 0.04 },
+      ETH_USDT: { makerPct: 0,    takerPct: 0.02 },
+      SOL_USDT: { makerPct: 0,    takerPct: 0.01 },
+    },
+  },
+};
+let feeEdits = {};   // fees you typed, per exchange and coin: { MEXC: { BTC_USDT: { maker: '0.01', taker: '0.04' } } }
+const exchangeId = () => (EXCHANGES[$('exchange').value] ? $('exchange').value : Object.keys(EXCHANGES)[0]);
+function currentCoin() { const r = document.querySelector('input[name="symbol"]:checked'); return r ? r.value : 'BTC_USDT'; }
+function orderType() { const r = document.querySelector('input[name="orderType"]:checked'); return r && r.value === 'limit' ? 'limit' : 'market'; }
+
+// Put the selected coin's fees in the boxes: what you typed for it before, or the exchange's standard fees.
+function loadCoinFees() {
+  const p = EXCHANGES[exchangeId()].coins[currentCoin()] || {};
+  const mine = (feeEdits[exchangeId()] || {})[currentCoin()] || {};
+  const pick = (typed, std) => (typeof typed === 'string' && typed.trim() !== '' ? typed : std != null ? String(std) : '');
+  $('makerPct').value = pick(mine.maker, p.makerPct);
+  $('takerPct').value = pick(mine.taker, p.takerPct);
+}
+function rememberCoinFees() {
+  const ex = exchangeId();
+  if (!feeEdits[ex] || typeof feeEdits[ex] !== 'object') feeEdits[ex] = {};
+  feeEdits[ex][currentCoin()] = { maker: $('makerPct').value, taker: $('takerPct').value };
+}
+// Fee per leg { entry, stop, tp } from the maker/taker boxes and the order settings, or null if a box is unreadable.
+function currentFees() {
+  const maker = FuturesMath.parseNumber($('makerPct').value), taker = FuturesMath.parseNumber($('takerPct').value);
+  if (!(maker >= 0 && maker < 10) || !(taker >= 0 && taker < 10)) return null;
+  return FuturesMath.feeLegs(maker, taker, orderType(), $('tpLimit').checked);
+}
+function feeSourceText() {
+  const ex = EXCHANGES[exchangeId()], p = ex.coins[currentCoin()];
+  return p ? `${currentCoin()} on ${ex.name}: standard maker ${p.makerPct}%, taker ${p.takerPct}% (${ex.name} contract data, ` +
+             `${ex.fetched}). Change them to match your fee level — remembered for each coin.` : '';
+}
+function feeLegsText() {
+  const f = currentFees();
+  if (!f) return 'Check the maker and taker fees.';
+  const pct = x => Fmt.num(x * 100, 4).replace(/\.?0+$/, '') + '%';
+  return `Fees used: open ${pct(f.entry)} (${orderType() === 'limit' ? 'maker' : 'taker'}) · stop ${pct(f.stop)} (taker) · ` +
+         `TP ${pct(f.tp)} (${$('tpLimit').checked ? 'maker' : 'taker'}).`;
+}
+// Market order price: you buy at the ask (LONG) and sell at the bid (SHORT); the last price if those are missing.
+const marketPrice = (side, q) => (side === 'short' ? (q.bid > 0 ? q.bid : q.price) : (q.ask > 0 ? q.ask : q.price));
 
 function readRaw() {
   const raw = { side: document.querySelector('input[name="side"]:checked').value };
@@ -949,6 +1098,10 @@ function readRaw() {
   raw.tpMode = tpMode();             // remembered: Manual, 1.5, 2, 3, custom or ladder
   raw.customR = $('customR').value;
   for (const id of SETTING_IDS) raw[id] = $(id).value;   // caution settings, remembered
+  raw.exchange = exchangeId();
+  raw.orderType = orderType();
+  raw.tpLimit = $('tpLimit').checked;
+  raw.feeEdits = feeEdits;
   return raw;
 }
 
@@ -960,7 +1113,8 @@ function toInputs(raw) {
   return { side: raw.side, balance: n('balance'), riskPct: n('riskPct'), leverage: n('leverage'),
            available: n('available'), openRisk: n('openRisk'),
            entry: n('entry'), stop: n('stop'), tps: [n('tp1'), n('tp2'), n('tp3')],
-           feePct: n('feePct'), mmrPct: n('mmrPct'),
+           makerPct: n('makerPct'), takerPct: n('takerPct'), orderType: raw.orderType, tpLimit: raw.tpLimit === true,
+           mmrPct: n('mmrPct'),
            coin, minStopPct: minStopOk(minStop) ? minStop : null,          // empty or unreadable → the default
            maxOpenRiskPct: minStopOk(maxOpen) ? maxOpen : null };
 }
@@ -1167,6 +1321,10 @@ function fillForm(saved) {
   if (typeof saved.customR === 'string') $('customR').value = saved.customR;
   if (saved.calcDir === 'tp' || saved.calcDir === 'stop') $(saved.calcDir === 'stop' ? 'cd-stop' : 'cd-tp').checked = true;
   if (typeof saved.tpMode === 'string') setTpMode(saved.tpMode);
+  if (typeof saved.exchange === 'string' && EXCHANGES[saved.exchange]) $('exchange').value = saved.exchange;
+  if (saved.orderType === 'market' || saved.orderType === 'limit') $(saved.orderType === 'limit' ? 'ot-limit' : 'ot-market').checked = true;
+  $('tpLimit').checked = saved.tpLimit === true;
+  if (saved.feeEdits && typeof saved.feeEdits === 'object') feeEdits = saved.feeEdits;
 }
 
 /* Reward : risk ratio (1.5R, 2R, 3R, Custom, Ladder), in two directions:
@@ -1241,8 +1399,9 @@ function applyAuto() {
 
   const n = id => FuturesMath.parseNumber($(id).value);
   const side = document.querySelector('input[name="side"]:checked').value;
-  const entry = n('entry'), feePct = n('feePct');
-  const feeOk = feePct >= 0 && feePct < 10;
+  const entry = n('entry');
+  const fees = currentFees();                          // fee per leg (open / stop / TP)
+  const feeOk = fees != null;
   const ratios = mode === 'ladder' ? [1, 2, 3] : mode === 'custom' ? [n('customR')] : [Number(mode)];
   const ids = calculatedIds();
   const clear = () => ids.forEach(id => { $(id).value = ''; });
@@ -1257,7 +1416,7 @@ function applyAuto() {
   if (stopMode) {
     const tp = n('tp1');
     if (!(entry > 0) || !(tp > 0) || !feeOk) { clear(); return { note: 'Enter entry and TP 1 — the stop loss is calculated from them.' }; }
-    const r = FuturesMath.stopForR(side, entry, tp, feePct / 100, ratios[0]);
+    const r = FuturesMath.stopForR(side, entry, tp, fees, ratios[0]);
     if (r.error) { clear(); const msg = noStopText(r.error, side, entry); return { note: msg, warn: msg }; }
     $('stop').value = stopText(r.stop, side, entry, tp);
     $('stop').classList.add('auto');
@@ -1269,7 +1428,7 @@ function applyAuto() {
   if (!(entry > 0) || !(stop > 0) || !feeOk) { clear(); return { note: 'Enter entry and stop loss — the take profit is calculated from them.' }; }
   let wrongStop = false, belowZero = false;
   ids.forEach((id, i) => {
-    const tp = FuturesMath.takeProfitForR(side, entry, stop, feePct / 100, ratios[i]);
+    const tp = FuturesMath.takeProfitForR(side, entry, stop, fees, ratios[i]);
     if (Number.isFinite(tp) && tp > 0) { $(id).value = tpText(tp, side, entry, stop); $(id).classList.add('auto'); }
     else { $(id).value = ''; if (Number.isFinite(tp)) belowZero = true; else wrongStop = true; }
   });
@@ -1287,7 +1446,36 @@ function onTpModeChange() {
   if (mode === 'custom' && $('customR').value === '') $('customR').focus();
 }
 
+// Market order: Entry follows the live ask (LONG) or bid (SHORT) and can't be typed in.
+// Limit order, or no live price: you type Entry. Returns the note under the Market | Limit buttons.
+let marketWasLive = false;
+function syncMarketEntry() {
+  const market = orderType() === 'market', entry = $('entry');
+  $('useLive').hidden = market;                         // Market fills Entry by itself
+  marketWasLive = false;
+  if (!market) {
+    entry.readOnly = false; entry.classList.remove('auto');
+    return { note: 'Limit order: type your entry price. Opening fee = maker.' };
+  }
+  const side = document.querySelector('input[name="side"]:checked').value;
+  if (liveIsFresh()) {
+    entry.value = String(marketPrice(side, live));
+    entry.readOnly = true; entry.classList.add('auto');
+    marketWasLive = true;
+    return { note: `Market order: Entry follows the live ${side === 'short' ? 'bid' : 'ask'} for ${currentCoin()}. Opening fee = taker.` };
+  }
+  entry.readOnly = false; entry.classList.remove('auto');
+  const waiting = live.state === 'connecting' || live.state === 'connected';
+  return { warn: true, note: (waiting ? 'Waiting for the live price — until it arrives, ' : 'Live price unavailable — ') +
+                             'the Market order uses the entry you type. Opening fee = taker.' };
+}
+
 function update() {
+  const market = syncMarketEntry();
+  $('orderHint').textContent = market.note;
+  $('orderHint').classList.toggle('caution', Boolean(market.warn));
+  $('feeHint').textContent = feeSourceText();
+  $('feeLegsHint').textContent = feeLegsText();
   const auto = applyAuto();
   $('tpModeHint').textContent = auto.note;
   $('tpModeHint').classList.toggle('warn', Boolean(auto.warn));
@@ -1309,6 +1497,11 @@ function onFormEdit(e) {
   const t = e.target;
   if (t && t.name === 'tpMode') onTpModeChange();
   else if (t && calculatedIds().includes(t.id)) setTpMode('manual');   // you typed in a calculated box: keep your number
+  if (t && (t.id === 'makerPct' || t.id === 'takerPct')) rememberCoinFees();
+  if (t && (t.name === 'symbol' || t.id === 'exchange')) {
+    loadCoinFees();                                                     // the new coin's fees
+    if (orderType() === 'market' && $('entry').classList.contains('auto')) $('entry').value = '';  // old coin's price
+  }
   update();
 }
 
@@ -1347,9 +1540,10 @@ const LiveFeed = (() => {
     if (!m || typeof m !== 'object') return null;
     if (m.channel === 'push.ticker') {
       if (!m.data || m.data.symbol !== wantedSymbol) return null;   // late message for a coin we left
-      const v = m.data.lastPrice;
-      const price = typeof v === 'number' || typeof v === 'string' ? Number(v) : NaN;
-      return Number.isFinite(price) && price > 0 ? { type: 'price', symbol: wantedSymbol, price } : null;
+      const num = v => (typeof v === 'number' || typeof v === 'string' ? Number(v) : NaN);
+      const price = num(m.data.lastPrice), bid = num(m.data.bid1), ask = num(m.data.ask1);
+      if (!(Number.isFinite(price) && price > 0)) return null;
+      return { type: 'price', symbol: wantedSymbol, price, bid: bid > 0 ? bid : null, ask: ask > 0 ? ask : null };
     }
     if (m.channel === 'pong') return { type: 'pong' };
     if (m.channel === 'rs.sub.ticker') return { type: 'subscribed' };
@@ -1395,7 +1589,7 @@ const LiveFeed = (() => {
         if (ws !== sock) return;
         lastHeard = Date.now();
         const msg = parseMessage(e.data, symbol);
-        if (msg && msg.type === 'price') onPrice(msg.symbol, msg.price);
+        if (msg && msg.type === 'price') onPrice(msg.symbol, msg);
         else if (msg && msg.type === 'error') onError(msg.text);
       };
       sock.onclose = () => { if (ws === sock) { ws = null; retry(); } };  // dropped by the network or server
@@ -1432,22 +1626,25 @@ const LiveFeed = (() => {
   return { URL, SYMBOLS, PING_EVERY_MS, STALE_PRICE_MS, retryDelay, parseMessage, createConnection };
 })();
 
-const live = { symbol: 'BTC_USDT', price: null, priceSymbol: null, at: 0, decimals: {}, state: 'connecting', detail: '', error: '' };
+const live = { symbol: 'BTC_USDT', price: null, bid: null, ask: null, priceSymbol: null, at: 0, decimals: {},
+               state: 'connecting', detail: '', error: '' };
 let liveConn = null;
 const STATUS_TEXT = { connecting: 'Connecting…', connected: 'Connected', reconnecting: 'Reconnecting…', offline: 'Offline' };
 
-function liveIsFresh() {
-  return live.state === 'connected' && live.price != null && live.priceSymbol === live.symbol &&
+function liveIsFresh() {   // a recent price for the coin that is selected right now
+  return live.state === 'connected' && live.price != null && live.priceSymbol === currentCoin() &&
          Date.now() - live.at < LiveFeed.STALE_PRICE_MS;
 }
 
 function renderLive() {
   $('liveStatusBox').dataset.state = live.state;
   $('liveStatus').textContent = STATUS_TEXT[live.state] || live.state;
-  const has = live.price != null && live.priceSymbol === live.symbol;
+  const has = live.price != null && live.priceSymbol === currentCoin();
   const fresh = liveIsFresh();
   const age = Math.max(0, Math.round((Date.now() - live.at) / 1000));
-  $('livePrice').textContent = has ? Fmt.num(live.price, live.decimals[live.symbol] || 0) : '—';
+  const dec = live.decimals[live.symbol] || 0;
+  $('livePrice').textContent = has ? Fmt.num(live.price, dec) : '—';
+  $('liveQuote').textContent = has && live.bid > 0 && live.ask > 0 ? `Bid ${Fmt.num(live.bid, dec)} · Ask ${Fmt.num(live.ask, dec)}` : '';
   $('livePrice').classList.toggle('stale', !fresh);
   $('useLive').disabled = !fresh;
   let note;
@@ -1460,13 +1657,20 @@ function renderLive() {
   $('liveAge').textContent = note;
 }
 
-function onLivePrice(symbol, price) {
+function onLivePrice(symbol, quote) {      // quote = { price, bid, ask }
   if (symbol !== live.symbol) return;
-  live.price = price; live.priceSymbol = symbol; live.at = Date.now(); live.error = '';
-  live.decimals[symbol] = Math.max(live.decimals[symbol] || 0, Fmt.decimalsOf(price));
+  live.price = quote.price; live.bid = quote.bid; live.ask = quote.ask;
+  live.priceSymbol = symbol; live.at = Date.now(); live.error = '';
+  live.decimals[symbol] = Math.max(live.decimals[symbol] || 0, ...[quote.price, quote.bid, quote.ask].filter(v => v > 0).map(Fmt.decimalsOf));
   renderLive();
+  if (orderType() === 'market') update();  // a Market order's entry follows the price
 }
-function onLiveStatus(state, detail) { live.state = state; live.detail = detail; renderLive(); }
+// Every second (and on status changes): redraw, and refresh a Market order when its live price comes or goes.
+function liveTick() {
+  renderLive();
+  if (orderType() === 'market' && liveIsFresh() !== marketWasLive) update();
+}
+function onLiveStatus(state, detail) { live.state = state; live.detail = detail; liveTick(); }
 function onLiveError(text) { live.error = 'MEXC says: ' + text; renderLive(); }
 
 // "Use live price" is the ONLY place that writes a live price into Entry — and only when tapped.
@@ -1481,13 +1685,15 @@ $('useLive').addEventListener('click', () => {
 });
 document.querySelectorAll('input[name="symbol"]').forEach(radio => radio.addEventListener('change', () => {
   live.symbol = radio.value;
-  live.price = null; live.priceSymbol = null; live.error = '';   // never show the old coin's price
+  live.price = null; live.bid = null; live.ask = null; live.priceSymbol = null; live.error = '';   // never show the old coin's price
   if (liveConn) liveConn.setSymbol(live.symbol);
   renderLive();
 }));
 
+for (const id of Object.keys(EXCHANGES)) $('exchange').append(new Option(EXCHANGES[id].name, id));
 const saved = loadInputs();
 if (saved) fillForm(saved);
+loadCoinFees();
 for (const k in DEFAULTS) if ($(k).value === '') $(k).value = DEFAULTS[k];
 update();
 
@@ -1496,7 +1702,7 @@ try {
   live.symbol = (document.querySelector('input[name="symbol"]:checked') || {}).value || 'BTC_USDT';
   liveConn = LiveFeed.createConnection({ onPrice: onLivePrice, onStatus: onLiveStatus, onError: onLiveError });
   liveConn.start(live.symbol);
-  setInterval(renderLive, 1000);
+  setInterval(liveTick, 1000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) liveConn.wake(); });
   window.addEventListener('online', () => liveConn.wake());
   window.addEventListener('offline', () => liveConn.wentOffline());

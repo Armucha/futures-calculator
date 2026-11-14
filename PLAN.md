@@ -213,6 +213,26 @@ Log:
   6% / 0 = off, unreadable Available). Clicked through in Firefox: all 6 cases, 3% limit, Clear trade keeps both
   boxes, everything survives a reload.
 
+## Feature 8 — Exchange profile, order type, contract quantity, sizing mode (3 stages)
+Answers to my questions before starting (2026-11-14):
+- Fees **per coin** from MEXC's data (BTC 0.01/0.04, ETH 0/0.02, SOL 0/0.01) — the brief's 0.01/0.04 matched BTC only.
+- Contract rounding: main results keep the **exact** size; a separate **Order** box shows the rounded order + actual risk.
+- Calculated TP/stop rounded to MEXC's **price step** (in your favour).
+- "% of available" at 100%: **leave room for the opening fee** (trim only when margin + fee wouldn't fit).
+
+Stage 1 — exchange profile + order type:
+- `EXCHANGES` data block (MEXC: per-coin maker/taker, fetched 2026-11-14 with curl from
+  `contract.mexc.com/api/v1/contract/detail`). Exchange selector; maker + taker boxes replace the single fee box;
+  edits remembered per coin.
+- Fee legs: open = taker (Market) / maker (Limit); stop exit = taker; TP exit = taker, or maker with "TP as limit
+  order" (default off). All formulas (sizing, TP/stop from ratio, breakeven) use separate entry/exit fees; one fee
+  number still means the same fee on every leg, so the earlier tests still check the old behaviour.
+- Breakeven assumes closing like a stop (taker exit) — my call, stated in the app.
+- Market: Entry = live ask (LONG) / bid (SHORT), locked; no fresh live price → typed entry + amber note.
+  Switching coin clears a Market entry (it was the old coin's price).
+- Log: self-test 158/158; click-through with fixed live prices: ask/bid follow, Limit typing, TP maker, stale →
+  typed fallback, live back → locked again, per-coin fee edits, reload.
+
 ## Ideas for later (not built)
 - Split the position across TP1/TP2/TP3 (e.g. 50/30/20%) and show the blended result
 - Round the coin amount to the exchange's step size

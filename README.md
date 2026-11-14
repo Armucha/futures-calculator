@@ -41,16 +41,26 @@ local files. The calculator still works; it just starts empty each time.
    3R or Custom. The calculator then sets the **stop loss**, so the profit at TP 1 after fees is R times the
    loss at the stop after fees. If TP 1 is on the wrong side of entry, or too close to pay the fees, you get
    a red warning instead of a stop. Ladder only exists for take profits, so it is hidden in this mode.
-3. **Exchange fees:** taker fee (default 0.02%) and maintenance margin rate (default 0.5%).
+3. **Exchange:** pick the exchange (MEXC for now). The **maker** and **taker** fees load for the coin picked under
+   Live price, using MEXC's standard rates: BTC 0.01% / 0.04%, ETH 0% / 0.02%, SOL 0% / 0.01%, from MEXC's contract
+   data fetched 2026-11-14. Change them to your fee level; your edits are remembered for each coin. Maintenance
+   margin rate defaults to 0.5%.
+4. **Order:** **Market** — Entry follows the live price by itself (the **ask** for a LONG, the **bid** for a SHORT)
+   and can't be typed in; opening fee = taker. If live prices are down, you can type the entry, and an amber note
+   says so. **Limit** — you type the entry; opening fee = maker.
+   A stop always closes with the taker fee. A take profit closes with the taker fee, or the maker fee if you tick
+   **TP as limit order**. The line "Fees used" under the TP boxes shows which fee goes where.
    Check your exchange's fee page and fee level. Taker fees on many big exchanges are higher than 0.02%.
-4. Read the results. Anything dangerous shows in **red** at the top.
+5. Read the results. Anything dangerous shows in **red** at the top.
 
 "Clear trade" empties entry, stop and TPs, and keeps balance, risk, leverage and fees.
 
 ## Live prices (MEXC futures)
 
 - Pick a coin: **BTC_USDT**, **ETH_USDT** or **SOL_USDT**. The last traded price updates about every second.
-- Tap **"Use live price"** to copy it into Entry. Entry is **never** changed automatically.
+- With a **Market** order, Entry follows the live ask/bid by itself.
+- With a **Limit** order, tap **"Use live price"** to copy the last price into Entry. A Limit entry is **never**
+  changed automatically.
   You can still type any entry you like.
 - The button only works while the price is fresh (less than 15 s old) and for the coin you picked.
   When you switch coin, the old price disappears at once, so you can't copy the wrong coin's price.
@@ -96,7 +106,8 @@ balance, you get the red warning instead of the amber one. The 5% open-risk limi
 
 ## The formulas, in simple words
 
-*Fee* = price × fee rate. You pay it twice: when you open and when you close.
+*Fee* = price × fee rate. You pay it twice: when you open and when you close. Opening = taker (Market) or maker
+(Limit); closing at the stop = taker; closing at a TP = taker, or maker with "TP as limit order".
 
 | What | Formula | In words |
 |---|---|---|
@@ -107,9 +118,9 @@ balance, you get the red warning instead of the amber one. The 5% open-risk limi
 | Margin | position ÷ leverage | Leverage does **not** change how much you win or lose. It only changes how much money is locked, and how close liquidation is. |
 | Profit at a TP | coins × TP distance − entry fee − exit fee | Shown as if the whole position closes at that TP. |
 | Reward-to-risk | profit at TP ÷ loss at stop | "Before fees" = TP distance ÷ stop distance (what you see on a chart). |
-| Stop loss from a take profit + ratio R | P = (TP − entry) × d − fee × (entry + TP), L = P ÷ R<br>LONG: (entry × (1 + fee) − L) ÷ (1 − fee)<br>SHORT: (entry × (1 − fee) + L) ÷ (1 + fee) | The reverse of the row below: profit per coin at TP after fees (P), divided by R, is the loss per coin you accept (L). d = +1 LONG, −1 SHORT. Rounded slightly towards entry, in your favour. |
-| Take profit from a ratio R | LONG: (entry × (1 + fee) + R × loss per coin) ÷ (1 − fee)<br>SHORT: (entry × (1 − fee) − R × loss per coin) ÷ (1 + fee) | The price where profit after both fees = R × loss at the stop after fees. Shown rounded slightly in your favour, so the ratio is never below the one you picked. |
-| Breakeven | LONG: entry × (1 + fee) ÷ (1 − fee)<br>SHORT: entry × (1 − fee) ÷ (1 + fee) | The price where the move exactly pays both fees. |
+| Stop loss from a take profit + ratio R | P = (TP − entry) × d − entry fee × entry − TP fee × TP, L = P ÷ R<br>LONG: (entry × (1 + entry fee) − L) ÷ (1 − stop fee)<br>SHORT: (entry × (1 − entry fee) + L) ÷ (1 + stop fee) | The reverse of the row below: profit per coin at TP after fees (P), divided by R, is the loss per coin you accept (L). d = +1 LONG, −1 SHORT. Rounded slightly towards entry, in your favour. |
+| Take profit from a ratio R | LONG: (entry × (1 + entry fee) + R × loss per coin) ÷ (1 − TP fee)<br>SHORT: (entry × (1 − entry fee) − R × loss per coin) ÷ (1 + TP fee) | The price where profit after both fees = R × loss at the stop after fees. Shown rounded slightly in your favour, so the ratio is never below the one you picked. |
+| Breakeven | LONG: entry × (1 + entry fee) ÷ (1 − taker)<br>SHORT: entry × (1 − entry fee) ÷ (1 + taker) | The price where the move exactly pays both fees, if you close with a stop or market order (taker) — like a stop moved to breakeven. |
 | Liquidation (approx.) | LONG: entry × (1 − 1/leverage) ÷ (1 − MMR)<br>SHORT: entry × (1 + 1/leverage) ÷ (1 + MMR) | The price where your loss has eaten the margin down to the maintenance margin. Isolated margin, simplified. |
 | Minimum leverage | position ÷ (balance − opening fee), rounded up | Shown only when the margin doesn't fit in your balance. |
 
@@ -139,10 +150,18 @@ To make the calculator size exactly this trade, enter **balance 1321.11** and **
 | Position (balance 1321.11, risk 1%) | ≈ 1772 | **1,771.99 USDT** | ✅ |
 | Loss at stop incl. fees = chosen risk | exactly | difference **0.000000000** | ✅ |
 
-The self-test has 139 checks in total: your trade, a LONG trade, every warning,
+The self-test has 158 checks in total: your trade, a LONG trade, every warning,
 number reading (`66783,9`, `66,783.9`, `1,772` = 1772, `0,025` = 0.025, spaces), remembering inputs, reading MEXC messages
 (real samples, plus broken, negative and wrong-coin messages), take profit from a ratio, stop loss from a
-take profit, the amber cautions, and being in a trade already (Available, risk already open). All pass.
+take profit, the amber cautions, being in a trade already (Available, risk already open), and exchange fees
+(Market / Limit entry, TP as limit order). All pass.
+
+Exchange fees (balance 1000, risk 1%, LONG 100 / stop 95 / TP 110, maker 0.01%, taker 0.04%):
+
+| Order | Coins | Net profit at TP | Loss at stop |
+|---|---|---|---|
+| Market, TP taker | 1.969279 | 19.5274 | 10.00 |
+| Limit, TP maker | 1.980983 | 19.7682 | 10.00 |
 
 Cautions (fee 0.02%, MMR 0.5%, default minimums):
 
