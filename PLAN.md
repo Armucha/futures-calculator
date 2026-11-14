@@ -122,6 +122,23 @@ Log:
   events handled; 80 s keep-alive with no drops; unreachable endpoint → Reconnecting 1/2/4/8 s → Offline while the
   calculator keeps working by hand. Fixed a test that passed without really reconnecting (close is asynchronous).
 
+## Feature 3 — GitHub + GitHub Pages (open on the phone)
+Decision (2026-11-14): **public** repository + GitHub Pages, free. GitHub Free only allows Pages on public
+repositories; a private repo would need GitHub Pro, and the Pages site would still be public.
+Link: https://armucha.github.io/futures-calculator/
+
+Privacy / secrets check before the first upload:
+- No API keys or secrets in any version of any file (MEXC feed needs no key).
+- Commit author/committer email replaced in all commits with GitHub's private no-reply address
+  (history rewritten before anything was pushed; backup bundle kept outside the repo).
+- Removed the mention of the user's country from this plan (all versions).
+- Repo-local git config uses the no-reply address, so new commits stay private.
+
+Steps:
+- [x] 9. Account + login (done by you), history cleaned, re-scanned
+- [ ] 10. `index.html` forwarding to the calculator, `.nojekyll`, README phone section; create repo, push, turn on Pages
+- [ ] 11. Check the live site: page loads, self-test passes, live prices work from github.io
+
 ## Ideas for later (not built)
 - Split the position across TP1/TP2/TP3 (e.g. 50/30/20%) and show the blended result
 - Round the coin amount to the exchange's step size

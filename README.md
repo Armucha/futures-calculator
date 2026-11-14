@@ -7,6 +7,12 @@ Live prices for BTC, ETH and SOL come straight from MEXC. They need internet; th
 
 ## How to open it
 
+**Easiest, on any phone or computer:** open **https://armucha.github.io/futures-calculator/**
+and bookmark it. On Android, in Chrome: ⋮ menu → **Add to Home screen**, so it opens like an app.
+The page is hosted free by GitHub Pages. Your inputs are saved only in that phone's browser.
+
+Or use the file directly:
+
 | Device | What to do |
 |---|---|
 | **Linux / Mac** | Double-click `futures-calculator.html`. It opens in your browser. |
