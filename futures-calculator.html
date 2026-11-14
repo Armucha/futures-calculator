@@ -110,6 +110,16 @@
   #selftest td, #selftest th { padding:5px 6px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top; }
   #selftest th { color:var(--muted); font-weight:600; }
   #selftest .grp td { color:var(--muted); font-weight:600; padding-top:14px; }
+  @media (max-width: 600px) {   /* phones: one check per block instead of a wide table */
+    #selftest table, #selftest tbody, #selftest td { display:block; }
+    #selftest tr:first-child { display:none; }
+    #selftest tr { display:grid; grid-template-columns:44px 1fr; border-bottom:1px solid var(--line); padding:4px 0; }
+    #selftest td { border:0; padding:2px 4px; overflow-wrap:anywhere; }
+    #selftest td:nth-child(3), #selftest td:nth-child(4) { grid-column:2; color:var(--muted); }
+    #selftest td:nth-child(3)::before { content:"got "; }
+    #selftest td:nth-child(4)::before { content:"expected "; }
+    #selftest .grp td { grid-column:1 / -1; }
+  }
   .pass { color:var(--green); font-weight:700; }
   .fail { color:var(--red); font-weight:700; }
 </style>

@@ -58,7 +58,7 @@ maintenance margin rate (default 0.5%).
 - [x] 3. Full user interface: inputs, outputs, red warnings, live updates, dark phone layout
       (warnings moved here from step 4 — their logic was already in the math engine)
 - [x] 4. Remember last inputs + "Clear trade" button + "How the math works" section in the app
-- [ ] 5. README with formulas in simple words + test results; final check
+- [x] 5. README with formulas in simple words + test results; final check
 
 ## Test trade (from the brief)
 SHORT · entry 66783.9 · stop 67255 · TP 65800 · leverage 7 · position ≈ 1772 USDT.
@@ -84,3 +84,11 @@ Precomputed in Python (fee 0.02%, MMR 0.5%):
 - 2026-11-14 — Inputs saved in the browser (localStorage) on every change. Verified across a real reload in
   headless Firefox (fresh profile → type trade → reopen → trade is back). "Clear trade" empties entry/stop/TPs only.
   In-app "How the math works". Self-test now 54/54 (adds a storage round-trip; restores your saved inputs after).
+- 2026-11-14 — README (how to open on Linux/Mac/Android, formulas, worked example, test results, limits).
+  Self-test page made readable on phones. Final check: 54/54 pass; 360 px phone layout OK; file has no
+  external links (works offline). **All steps done.**
+
+## Ideas for later (not built)
+- Split the position across TP1/TP2/TP3 (e.g. 50/30/20%) and show the blended result
+- Round the coin amount to the exchange's step size
+- Maker fee option for limit-order entries

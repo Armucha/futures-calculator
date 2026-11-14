@@ -1,0 +1,85 @@
+# Futures Calculator
+
+A crypto futures position-size calculator in **one file**: `futures-calculator.html`.
+No internet, no installs, no external libraries. Dark theme, big numbers, made for phones.
+Results update while you type, and it remembers your last inputs.
+
+## How to open it
+
+| Device | What to do |
+|---|---|
+| **Linux / Mac** | Double-click `futures-calculator.html`. It opens in your browser. |
+| **Android** | Copy the file to the phone (USB cable, or send it to yourself by e-mail or a messenger), then open it from the Files app **with Chrome or Firefox**. Don't use a built-in "HTML viewer": it may block JavaScript. |
+
+If your phone doesn't remember the inputs, the browser is blocking storage for
+local files. The calculator still works; it just starts empty each time.
+
+## How to use it
+
+1. **Account:** your balance (USDT), how much of it you are willing to lose on this trade (%), and leverage.
+2. **Trade:** LONG or SHORT, entry, stop loss, take profit (TP 2 and TP 3 are optional).
+3. **Exchange fees:** taker fee (default 0.02%) and maintenance margin rate (default 0.5%).
+   Check your exchange's fee page and fee level. Taker fees on many big exchanges are higher than 0.02%.
+4. Read the results. Anything dangerous shows in **red** at the top.
+
+"Clear trade" empties entry, stop and TPs, and keeps balance, risk, leverage and fees.
+
+## The formulas, in simple words
+
+*Fee* = price × fee rate. You pay it twice: when you open and when you close.
+
+| What | Formula | In words |
+|---|---|---|
+| Risk in USDT | balance × risk % | The money you accept to lose. |
+| Loss per coin at stop | stop distance + entry fee + exit fee | What 1 coin costs you if the stop is hit, fees included. |
+| **Coins** | risk ÷ loss per coin | So the loss at the stop, fees included, is **exactly** your risk. |
+| Position size (USDT) | coins × entry | |
+| Margin | position ÷ leverage | Leverage does **not** change how much you win or lose. It only changes how much money is locked, and how close liquidation is. |
+| Profit at a TP | coins × TP distance − entry fee − exit fee | Shown as if the whole position closes at that TP. |
+| Reward-to-risk | profit at TP ÷ loss at stop | "Before fees" = TP distance ÷ stop distance (what you see on a chart). |
+| Breakeven | LONG: entry × (1 + fee) ÷ (1 − fee)<br>SHORT: entry × (1 − fee) ÷ (1 + fee) | The price where the move exactly pays both fees. |
+| Liquidation (approx.) | LONG: entry × (1 − 1/leverage) ÷ (1 − MMR)<br>SHORT: entry × (1 + 1/leverage) ÷ (1 + MMR) | The price where your loss has eaten the margin down to the maintenance margin. Isolated margin, simplified. |
+| Minimum leverage | position ÷ (balance − opening fee), rounded up | Shown only when the margin doesn't fit in your balance. |
+
+### Worked example: your test trade
+
+SHORT, entry 66,783.9, stop 67,255, TP 65,800, leverage 7, fee 0.02%, position 1,772 USDT.
+
+1. Coins: 1,772 ÷ 66,783.9 = **0.026533 BTC**
+2. Stop distance: 67,255 − 66,783.9 = 471.1 per coin → 0.026533 × 471.1 = **12.50 USDT**
+3. Fees at stop: 0.02% × (66,783.9 + 67,255) × 0.026533 = **0.71 USDT** → total loss **13.21 USDT**
+4. TP distance: 66,783.9 − 65,800 = 983.9 per coin → 0.026533 × 983.9 = **26.11 USDT**
+5. Fees at TP: 0.02% × (66,783.9 + 65,800) × 0.026533 = **0.70 USDT** → net profit **25.40 USDT**
+6. Reward-to-risk: 983.9 ÷ 471.1 = **2.09 before fees**; 25.40 ÷ 13.21 = **1.92 after fees**
+7. Margin: 1,772 ÷ 7 = **253.14 USDT**
+8. Breakeven: 66,783.9 × 0.9998 ÷ 1.0002 = **66,757.19**
+9. Liquidation: 66,783.9 × (1 + 1/7) ÷ 1.005 ≈ **75,944.73**, far above the stop, so no warning
+
+To make the calculator size exactly this trade, enter **balance 1321.11** and **risk 1%** (= 13.21 USDT).
+
+## Test results
+
+| Check | You expected | Calculator | |
+|---|---|---|---|
+| Loss at stop, price move | ≈ 12.5 + fees | 12.50 + 0.71 fees = **13.21** | ✅ |
+| Profit at TP, price move | ≈ 26 − fees | 26.11 − 0.70 fees = **25.40** | ✅ |
+| Reward-to-risk | ≈ 2.1 | **2.09** before fees · **1.92** after fees | ✅ |
+| Position (balance 1321.11, risk 1%) | ≈ 1772 | **1,771.99 USDT** | ✅ |
+| Loss at stop incl. fees = chosen risk | exactly | difference **0.000000000** | ✅ |
+
+The self-test has 54 checks in total: your trade, a LONG trade, every warning,
+number reading (`66783,9`, `66,783.9`, spaces) and remembering inputs. All pass.
+The expected numbers were computed separately in Python, not by the calculator itself.
+
+**Run the self-test yourself:**
+- In any browser, tap **"Run self-test"** at the bottom of the calculator,
+  or add `#test` to the end of the address.
+- On Linux: `./run-tests.sh` (uses headless Firefox, prints PASS/FAIL, exit code 0 = all passed).
+
+## Limits (be aware)
+
+- Liquidation is an **estimate**: real exchanges use maintenance tiers, fees and funding.
+  Keep your stop well before it.
+- Exchanges round position size to their minimum step, so the real size can be a tiny bit different.
+- Funding fees and slippage are not included.
+- Not financial advice.
