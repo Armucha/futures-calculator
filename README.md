@@ -1,8 +1,9 @@
 # Futures Calculator
 
 A crypto futures position-size calculator in **one file**: `futures-calculator.html`.
-No internet, no installs, no external libraries. Dark theme, big numbers, made for phones.
+No installs, no external libraries. Dark theme, big numbers, made for phones.
 Results update while you type, and it remembers your last inputs.
+Live prices for BTC, ETH and SOL come straight from MEXC. They need internet; the calculator itself doesn't.
 
 ## How to open it
 
@@ -23,6 +24,34 @@ local files. The calculator still works; it just starts empty each time.
 4. Read the results. Anything dangerous shows in **red** at the top.
 
 "Clear trade" empties entry, stop and TPs, and keeps balance, risk, leverage and fees.
+
+## Live prices (MEXC futures)
+
+- Pick a coin: **BTC_USDT**, **ETH_USDT** or **SOL_USDT**. The last traded price updates about every second.
+- Tap **"Use live price"** to copy it into Entry. Entry is **never** changed automatically.
+  You can still type any entry you like.
+- The button only works while the price is fresh (less than 15 s old) and for the coin you picked.
+  When you switch coin, the old price disappears at once, so you can't copy the wrong coin's price.
+- Status, top right of the box:
+
+  | Status | Meaning |
+  |---|---|
+  | 🟢 Connected | Live prices are coming in. |
+  | 🟡 Reconnecting… | The connection dropped. It tries again after 1, 2, 4 and 8 seconds. |
+  | 🔴 Offline | No connection. Type prices by hand. It keeps trying every 30 s, and right away when your phone is back online or you return to the tab. |
+
+- It is MEXC's public data feed: no account and no API key. Only the coin name is sent to MEXC,
+  never your balance or trade.
+
+How it works: the page opens a WebSocket (a live connection) to `wss://contract.mexc.com/edge`
+and sends `{"method":"sub.ticker","param":{"symbol":"BTC_USDT"}}`. MEXC then pushes `push.ticker`
+messages with `lastPrice`. Every 15 s the page sends `{"method":"ping"}`, because MEXC closes
+connections that stay quiet for 60 s. If nothing arrives for 40 s, the page assumes the
+connection is dead and reconnects.
+Sources: MEXC futures WebSocket docs for the
+[endpoint](https://www.mexc.com/api-docs/futures/websocket-api/native-ws-endpoint),
+[ping](https://www.mexc.com/api-docs/futures/websocket-api/command-details-for-data-exchange) and the
+[ticker](https://www.mexc.com/api-docs/futures/websocket-api/get-a-single-ticker).
 
 ## The formulas, in simple words
 
@@ -67,9 +96,24 @@ To make the calculator size exactly this trade, enter **balance 1321.11** and **
 | Position (balance 1321.11, risk 1%) | ≈ 1772 | **1,771.99 USDT** | ✅ |
 | Loss at stop incl. fees = chosen risk | exactly | difference **0.000000000** | ✅ |
 
-The self-test has 54 checks in total: your trade, a LONG trade, every warning,
-number reading (`66783,9`, `66,783.9`, spaces) and remembering inputs. All pass.
+The self-test has 65 checks in total: your trade, a LONG trade, every warning,
+number reading (`66783,9`, `66,783.9`, spaces), remembering inputs, and reading MEXC messages
+(real samples, plus broken, negative and wrong-coin messages). All pass.
 The expected numbers were computed separately in Python, not by the calculator itself.
+
+Live-price tests, run against the real MEXC feed in Firefox on 2026-11-14, page opened as a local file:
+
+| Test | Result |
+|---|---|
+| First price after opening | 1.7 s |
+| Entry typed as 100 while prices streamed | stayed 100 ✅ |
+| "Use live price" | Entry = 65414.3, the price shown ✅ |
+| Switch BTC → ETH → SOL | old price cleared at once; ETH and SOL prices arrived ✅ |
+| Connection closed | Reconnecting → Connected in 1.4 s, new prices ✅ |
+| Connection silently dead (no close) | noticed after 43 s, reconnected ✅ |
+| Phone offline → online | Offline, button disabled → Connected again ✅ |
+| Kept open 80 s (MEXC cuts at 60 s without ping) | stayed connected, 32 prices ✅ |
+| MEXC unreachable | calculator still works by hand; Reconnecting 1/2/4/8 s → Offline ✅ |
 
 **Run the self-test yourself:**
 - In any browser, tap **"Run self-test"** at the bottom of the calculator,
@@ -82,4 +126,8 @@ The expected numbers were computed separately in Python, not by the calculator i
   Keep your stop well before it.
 - Exchanges round position size to their minimum step, so the real size can be a tiny bit different.
 - Funding fees and slippage are not included.
+- The live price is the **last traded** price. A market order fills at the best bid or ask,
+  which can be slightly different.
+- Live prices were tested in Firefox on Linux. Chrome on Android uses the same standard WebSocket,
+  but it hasn't been tried on a real phone yet.
 - Not financial advice.

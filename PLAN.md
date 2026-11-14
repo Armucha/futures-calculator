@@ -88,6 +88,40 @@ Precomputed in Python (fee 0.02%, MMR 0.5%):
   Self-test page made readable on phones. Final check: 54/54 pass; 360 px phone layout OK; file has no
   external links (works offline). **All steps done.**
 
+## Feature 2 — Live prices (MEXC futures WebSocket)
+Source: MEXC futures WebSocket docs (native endpoint, data-exchange commands, single ticker).
+Checked live on 2026-11-14 from a page opened as a local file in Firefox (origin `null`): the server accepts it.
+
+| What | Message |
+|---|---|
+| Endpoint (JSON, no API key) | `wss://contract.mexc.com/edge` |
+| Subscribe | `{"method":"sub.ticker","param":{"symbol":"BTC_USDT"}}` → `{"channel":"rs.sub.ticker","data":"success"}` |
+| Price push (~every second) | `{"channel":"push.ticker","data":{"symbol":"BTC_USDT","lastPrice":65459.4,…}}` |
+| Keep-alive | `{"method":"ping"}` → `{"channel":"pong",…}`. Docs: ping every 10–20 s, server closes after 60 s without one. We ping every 15 s. |
+| Switch coin | `unsub.ticker` old symbol, then `sub.ticker` new one |
+| Bad symbol | `{"channel":"rs.error","data":"Contract [X] not exists"}` |
+
+Design:
+- Symbol picker: BTC_USDT / ETH_USDT / SOL_USDT (remembered with the other inputs).
+- Shows the last price. **"Use live price"** copies it into Entry **only when tapped**; nothing ever writes Entry automatically.
+- The button only works while the price is fresh (under 15 s old) and for the coin that is selected.
+  When you switch coin, the old price disappears at once so you can't copy the wrong coin's price.
+- Status: Connecting → Connected; if it drops: Reconnecting (waits 1, 2, 4, 8 s), then Offline (tries every 30 s,
+  and right away when the phone is back online or you return to the tab). No data for 40 s = dead connection → reconnect.
+- The live-price code is separate from the math and wrapped in try/catch: if it fails, typing prices by hand works as before.
+
+Steps:
+- [x] 6. Live price module + screen + self-tests for message reading and retry timing (65/65 pass)
+- [x] 7. Live tests in Firefox: real prices, entry never auto-changed, coin switch, dropped connection, 80 s keep-alive, broken endpoint
+- [x] 8. README update + commit
+
+Log:
+- 2026-11-14 — Live prices built and tested against the real MEXC feed (page opened as a local file):
+  first price 1.7 s; typed entry untouched; "Use live price" copies the shown price; BTC/ETH/SOL switching clears
+  the old price; closed connection → reconnected in 1.4 s; silent dead connection noticed after 43 s; offline/online
+  events handled; 80 s keep-alive with no drops; unreachable endpoint → Reconnecting 1/2/4/8 s → Offline while the
+  calculator keeps working by hand. Fixed a test that passed without really reconnecting (close is asynchronous).
+
 ## Ideas for later (not built)
 - Split the position across TP1/TP2/TP3 (e.g. 50/30/20%) and show the blended result
 - Round the coin amount to the exchange's step size
