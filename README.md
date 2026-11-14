@@ -124,7 +124,7 @@ balance, you get the red warning instead of the amber one. The 5% open-risk limi
 | **Coins** | risk ÷ loss per coin | So the loss at the stop, fees included, is **exactly** your risk. |
 | Position size (USDT) | coins × entry | |
 | Size by % of available | margin = Available × %, position = margin × leverage, coins = position ÷ entry | Then the risk is what the stop makes it: loss at stop = coins × loss per coin (shown as % of balance). |
-| Order (contracts) | coins ÷ contract size, rounded **down** to MEXC's step | MEXC trades whole contracts (BTC 0.0001, ETH 0.01, SOL 0.1). Rounding down keeps the real risk at or below the plan. |
+| Order (contracts) | coins ÷ contract size, rounded **down** to MEXC's step | MEXC trades whole contracts (BTC 0.0001, ETH 0.01, SOL 0.1). Rounding down keeps the real risk at or below the plan. **All results** (position, margin, loss, profit, open risk) use this real order; the unrounded plan is a small note under Position size. |
 | Margin | position ÷ leverage | Leverage does **not** change how much you win or lose. It only changes how much money is locked, and how close liquidation is. |
 | Profit at a TP | coins × TP distance − entry fee − exit fee | Shown as if the whole position closes at that TP. |
 | Reward-to-risk | profit at TP ÷ loss at stop | "Before fees" = TP distance ÷ stop distance (what you see on a chart). |
@@ -254,8 +254,8 @@ Live-price tests, run against the real MEXC feed in Firefox on 2026-11-14, page 
 
 - Liquidation is an **estimate**: real exchanges use maintenance tiers, fees and funding.
   Keep your stop well before it.
-- The main results use the exact size; the **Order** box shows the real MEXC order (whole contracts, rounded down)
-  and its actual risk, a little below the plan.
+- All results use the real MEXC order (whole contracts, rounded down), so the risk shown is the risk you take;
+  the planned size before rounding is a small note under Position size.
 - Funding fees and slippage are not included.
 - The live price is the **last traded** price. A market order fills at the best bid or ask,
   which can be slightly different.

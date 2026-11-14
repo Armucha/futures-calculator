@@ -262,6 +262,13 @@ Stage 3 — sizing mode:
    Log: 10-step click-through with fixed prices (freeze, price moves, offline, unfreeze, side, coin, Limit, Clear trade,
    stale) all as expected; self-test unchanged 192/192 (freeze is screen state, checked in the browser).
 
+2. **Rounded order everywhere** (your request — replaces Stage 2's "exact size + Order box"): with contract details
+   known, position, margin, loss, TP profit, total open risk, margin checks and cautions all use the whole-contract
+   order. The unrounded plan is a small note in the Position tile; the separate Order box is gone. R:R and fee share
+   are now computed per coin, so a 0-contract order shows 0 USDT with a sensible R:R instead of 0 ÷ 0. Available-mode
+   risk % / HIGH_RISK use the real loss. Log: self-test 202/202 (+10); screen: BTC 261 contracts everywhere, SOL 0
+   + red warning; fixed "−0.00" for a zero loss and shortened the Position tile text for phones.
+
 ## Ideas for later (not built)
 - Split the position across TP1/TP2/TP3 (e.g. 50/30/20%) and show the blended result
 - Round the coin amount to the exchange's step size

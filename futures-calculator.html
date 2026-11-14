@@ -137,6 +137,7 @@
   .pos { color:var(--green); }
   .neg { color:var(--red); }
   .amber { color:var(--amber-text); }
+  .small-note { font-size:.74rem; color:var(--faint); }
   .tp { display:grid; grid-template-columns:1fr auto; gap:2px 12px; padding:10px 0; border-top:1px solid var(--line); }
   .tp:first-child { border-top:0; padding-top:4px; }
   .rr { text-align:right; }
@@ -366,10 +367,9 @@
       <div id="cautions" class="cautions" aria-live="polite" hidden></div>
       <div id="placeholder" class="placeholder"></div>
       <div id="out" class="tiles" hidden>
-        <div class="tile"><div class="lbl">Position size</div><div class="big" id="o-pos"></div><div class="sub" id="o-qty"></div></div>
+        <div class="tile"><div class="lbl">Position size</div><div class="big" id="o-pos"></div><div class="sub" id="o-qty"></div>
+          <div class="sub small-note" id="o-planned" hidden></div></div>
         <div class="tile"><div class="lbl">Margin required</div><div class="big" id="o-margin"></div><div class="sub" id="o-margin-sub"></div></div>
-        <div class="tile wide" id="o-order-tile" hidden><div class="lbl" id="o-order-lbl">Order</div>
-          <div class="big" id="o-order"></div><div class="sub" id="o-order-sub"></div><div class="sub" id="o-order-risk"></div></div>
         <div class="tile"><div class="lbl">Loss at stop loss</div><div class="big neg" id="o-loss"></div><div class="sub" id="o-loss-sub"></div></div>
         <div class="tile"><div class="lbl">Breakeven price</div><div class="big" id="o-be"></div><div class="sub">Closing here = 0 after fees</div></div>
         <div class="tile wide" id="o-openrisk-tile" hidden><div class="lbl">Total open risk — all your trades, if every stop is hit</div>
@@ -400,8 +400,9 @@
             Near 100% the position is trimmed a little so the margin plus the opening fee still fit.</li>
         <li><b>Order in contracts</b>: MEXC trades whole contracts (1 contract = 0.0001 BTC, 0.01 ETH or 0.1 SOL).
             Contracts = coins ÷ contract size, rounded <b>down</b> to MEXC's step — so the real risk ends up a little
-            <i>below</i> your plan, never above. The other results use the exact size; the Order box shows what you
-            would really place and its actual risk. Below MEXC's minimum (1 contract) you get a red warning.</li>
+            <i>below</i> your plan, never above. <b>All results</b> (position, margin, loss, profit, open risk) use this real
+            order; the unrounded plan is a small note under Position size. Below MEXC's minimum (1 contract) you get a red
+            warning.</li>
         <li><b>Margin</b> = position size ÷ leverage. Leverage does <i>not</i> change how many USDT you win or lose —
             it only changes how much money is locked as margin, and how close liquidation is.<br>
             <span class="eg">Already in a trade? The margin (+ opening fee) must fit in <b>Available</b> if you fill it in,
@@ -604,6 +605,7 @@ const FuturesMath = (() => {
     const s = closeAt(t.side, t.entry, t.stop, t.qty, f.entry, f.stop);
     const loss = { price: -s.gross, fees: s.fees, total: -s.net };
     const stopDistance = (t.entry - t.stop) * d;
+    const lossPc = lossPerCoin(t.side, t.entry, t.stop, f);   // per coin, so ratios also work for an order of 0
 
     const takeProfits = [];
     (t.tps || []).forEach((price, i) => {
@@ -612,7 +614,7 @@ const FuturesMath = (() => {
       takeProfits.push({
         n: i + 1, price, gross: r.gross, fees: r.fees, net: r.net,
         rightSide: tpIsOnRightSide(t.side, t.entry, price),
-        rrAfterFees: r.net / loss.total,
+        rrAfterFees: ((price - t.entry) * d - f.entry * t.entry - f.tp * price) / lossPc,   // net per coin ÷ loss per coin
         rrBeforeFees: ((price - t.entry) * d) / stopDistance,
       });
     });
@@ -635,7 +637,7 @@ const FuturesMath = (() => {
       stopDistancePct: stopDistance / t.entry * 100,
       takeProfits, breakeven: breakevenPrice(t.side, t.entry, f), fees: f,
       liquidation, liqBeforeStop, notEnoughBalance, minLeverage,
-      feeSharePct: loss.fees / loss.total * 100,                               // fees as % of the loss at the stop
+      feeSharePct: (f.entry * t.entry + f.stop * t.stop) / lossPc * 100,     // fees as % of the loss at the stop
       marginSharePct: funds != null ? margin / funds * 100 : null,             // margin as % of available (or balance)
       marginBase: t.available != null ? 'available' : 'balance',
     };
@@ -716,14 +718,25 @@ const FuturesMath = (() => {
       if (position > maxPosition) { position = maxPosition; trimmedForFee = true; }
       qty = position / inp.entry;
       riskAmount = qty * lpc;                              // your risk is whatever the stop makes it
-      const pct = riskAmount / inp.balance * 100;
-      if (pct > RISK_LIMIT_PCT) warnings.push({ code: 'HIGH_RISK', riskPct: pct });
     } else {
       riskAmount = inp.balance * inp.riskPct / 100;
       qty = riskAmount / lpc;
     }
-    const r = evaluate({ side: inp.side, entry: inp.entry, stop: inp.stop, tps, qty,
+    // The real order: whole contracts, rounded DOWN, when the exchange's contract details are known.
+    // ALL results use it; the exact size is kept as `planned` (shown as a small note).
+    const planned = { qty, positionUsdt: qty * inp.entry, riskAmount };
+    let order = null;
+    if (inp.contract && inp.contract.contractSize > 0) {
+      order = orderQuantity(qty, inp.entry, lpc, inp.contract);
+      if (order.belowMin) {
+        warnings.push({ code: 'ORDER_BELOW_MIN', contracts: order.contracts, minVol: order.minVol, entry: inp.entry,
+                        contractSize: inp.contract.contractSize, coin: inp.contract.coin, exchange: inp.contract.exchange });
+      }
+    }
+    const r = evaluate({ side: inp.side, entry: inp.entry, stop: inp.stop, tps, qty: order ? order.coins : qty,
                          leverage: inp.leverage, fees, mmr, balance: inp.balance, available: opt.available });
+    const riskPctUsed = r.loss.total / inp.balance * 100;   // the real loss at the stop, as % of the balance
+    if (byAvailable && riskPctUsed > RISK_LIMIT_PCT) warnings.push({ code: 'HIGH_RISK', riskPct: riskPctUsed });
 
     if (r.liqBeforeStop) warnings.push({ code: 'LIQ_BEFORE_STOP', liquidation: r.liquidation, stop: inp.stop });
     if (r.notEnoughBalance) {
@@ -757,20 +770,9 @@ const FuturesMath = (() => {
         cautions.push({ code: 'OPEN_RISK_HIGH', total: totalOpenRisk, pct: totalOpenRiskPct, limitPct: openRiskLimitPct });
       }
     }
-    // The order in whole contracts, when the exchange's contract details are known.
-    let order = null;
-    if (inp.contract && inp.contract.contractSize > 0) {
-      order = orderQuantity(qty, inp.entry, lpc, inp.contract);
-      order.actualRiskPct = order.actualRisk / inp.balance * 100;
-      if (order.belowMin) {
-        warnings.push({ code: 'ORDER_BELOW_MIN', contracts: order.contracts, minVol: order.minVol, entry: inp.entry,
-                        contractSize: inp.contract.contractSize, coin: inp.contract.coin, exchange: inp.contract.exchange });
-      }
-    }
-    return Object.assign({ status: 'ok', missing, invalid, riskAmount, warnings: sortW(), cautions,
+    return Object.assign({ status: 'ok', missing, invalid, riskAmount, planned, warnings: sortW(), cautions,
                            totalOpenRisk, totalOpenRiskPct, openRiskLimitPct, order,
-                           sizeMode: byAvailable ? 'available' : 'risk', riskPctUsed: riskAmount / inp.balance * 100,
-                           trimmedForFee }, r);
+                           sizeMode: byAvailable ? 'available' : 'risk', riskPctUsed, trimmedForFee }, r);
   }
 
   return { RISK_LIMIT_PCT, MIN_RR, MIN_STOP_PCT, FEE_SHARE_LIMIT_PCT, MARGIN_SHARE_LIMIT_PCT, MAX_OPEN_RISK_PCT, parseNumber, lossPerCoin, closeAt, breakevenPrice,
@@ -1051,8 +1053,9 @@ function runSelfTest() {
 
   section('M. Order in whole contracts (MEXC contract details, fetched 2026-11-14)');
   const mexc = c => contractFor('MEXC', c);
-  const o1 = M.calculate({ side: 'short', balance: 1321.11, riskPct: 1, entry: 66783.9, stop: 67255, tps: [65800, null, null],
-                           leverage: 7, feePct: 0.02, mmrPct: 0.5, contract: mexc('BTC_USDT') }).order;
+  const m1 = M.calculate({ side: 'short', balance: 1321.11, riskPct: 1, entry: 66783.9, stop: 67255, tps: [65800, null, null],
+                           leverage: 7, feePct: 0.02, mmrPct: 0.5, contract: mexc('BTC_USDT') });
+  const o1 = m1.order;
   near('BTC real trade: contracts before rounding', o1.exactContracts, 265.332267, 1e-5);
   is('   rounded DOWN to whole contracts', o1.contracts, 265);
   near('   = coins (BTC)', o1.coins, 0.0265, 1e-12);
@@ -1070,6 +1073,18 @@ function runSelfTest() {
   is('   warning text', warningText(o4.warnings[0], null),
      "The order rounds down to 0 contracts — below MEXC's minimum of 1 (0.1 SOL ≈ 10.00 USDT). Use a closer stop or a bigger risk, or skip this trade.");
   is('No contract details → no order box (as before)', M.calculate(ethTrade).order, null);
+  near('ALL results use the 265 contracts: position (USDT)', m1.positionUsdt, 1769.77335, 1e-6);
+  near('   margin at 7x', m1.margin, 252.824764, 1e-6);
+  near('   loss at stop = actual risk', m1.loss.total, 13.19455617, 1e-8);
+  near('   net profit at TP', m1.takeProfits[0].net, 25.37065533, 1e-8);
+  near('   R:R after fees (the same as before rounding)', m1.takeProfits[0].rrAfterFees, 1.92281233, 1e-8);
+  near('   planned (unrounded) position, for the note', m1.planned.positionUsdt, 1771.992358, 1e-5);
+  near('   planned risk, for the note', m1.planned.riskAmount, 13.2111, 1e-9);
+  const m3 = M.calculate(Object.assign({}, ethTrade, { contract: mexc('ETH_USDT'), openRisk: 10 }));
+  near('ETH 73 contracts + 10 already open → total open risk uses the real order', m3.totalOpenRisk, 15.75724136, 1e-8);
+  near('   margin as % of balance uses the real order', m3.marginSharePct, 64.9658, 0.0001);
+  is('SOL order of 0 contracts → position 0, loss 0, R:R still 2.00',
+     `${o4.positionUsdt} / ${o4.loss.total} / ${o4.takeProfits[0].rrAfterFees.toFixed(2)}`, '0 / 0 / 2.00');
   is('Price step: BTC SHORT 2R TP rounded DOWN to 0.1', tpText(M.takeProfitForR('short', 66783.9, 67255, 0.0002, 2), 'short', 66783.9, 67255, 0.1), '65761.5');
   near('   R:R after fees with that TP is still at least 2', rrAt('short', 66783.9, 67255, 0.0002, 65761.5), 2.000151, 1e-6);
   is('Price step: LONG 2R TP rounded UP to 0.01', tpText(M.takeProfitForR('long', 100, 95, 0.001, 2), 'long', 100, 95, 0.01), '110.61');
@@ -1352,7 +1367,7 @@ function renderSummary(res) {
   const item = (label, value, cls) => { const sp = h('span', null, label + ' '); sp.append(h('b', cls, value)); s.append(sp); };
   if (res.status === 'ok') {
     item('Size', Fmt.usdt(res.positionUsdt));
-    item('Loss', '−' + Fmt.usdt(res.loss.total), 'neg');
+    item('Loss', (res.loss.total > 0.005 ? '−' : '') + Fmt.usdt(res.loss.total), 'neg');
     const tp = res.takeProfits[0];
     if (tp) item('TP' + tp.n, Fmt.signed(tp.net, 2), tp.net >= 0 ? 'pos' : 'neg');
     if (tp && tp.rightSide) item('R:R', tp.rrAfterFees.toFixed(2), tp.rrAfterFees >= FuturesMath.MIN_RR ? 'pos' : 'neg');
@@ -1379,14 +1394,17 @@ function render(res, inp) {
   }
   if (inp.sizeMode === 'available') {                  // size by % of available: the stop decides the risk
     $('riskHint').textContent = res.status === 'ok'
-      ? `If the stop is hit you lose ${Fmt.usdt(res.riskAmount)} USDT = ${Fmt.num(res.riskPctUsed, 2)}% of your balance, fees included.` +
+      ? `If the stop is hit you lose ${Fmt.usdt(res.loss.total)} USDT = ${Fmt.num(res.riskPctUsed, 2)}% of your balance, fees included.` +
         (res.trimmedForFee ? ' (Trimmed a little so the margin plus the opening fee fit in Available.)' : '')
       : 'Margin = the chosen % of Available (of Balance when Available is empty); position = margin × leverage.';
   } else {
     const riskKnown = inp.balance > 0 && inp.riskPct > 0 && inp.riskPct <= 100;
-    $('riskHint').textContent = riskKnown
-      ? `If the stop is hit you lose ${Fmt.usdt(inp.balance * inp.riskPct / 100)} USDT, fees included.`
-      : 'Risk = how much of your balance you accept to lose if the stop loss is hit.';
+    $('riskHint').textContent = res.status === 'ok' && res.order
+      ? `If the stop is hit you lose ${Fmt.usdt(res.loss.total)} USDT, fees included ` +
+        `(planned ${Fmt.usdt(res.planned.riskAmount)}; the order is rounded down to whole contracts).`
+      : riskKnown
+        ? `If the stop is hit you lose ${Fmt.usdt(inp.balance * inp.riskPct / 100)} USDT, fees included.`
+        : 'Risk = how much of your balance you accept to lose if the stop loss is hit.';
   }
 
   for (const id of SETTING_IDS) {                       // caution settings: red border if unreadable
@@ -1412,8 +1430,17 @@ function render(res, inp) {
   $('out').hidden = false;
   $('placeholder').hidden = true;
 
-  setBig('o-pos', Fmt.usdt(res.positionUsdt), 'USDT');
-  $('o-qty').textContent = `${Fmt.coins(res.qty)} coins`;
+  const o = res.order, c = inp.contract;                // whole-contract order (all results use it)
+  setBig('o-pos', Fmt.usdt(res.positionUsdt), 'USDT', o && o.belowMin ? 'neg' : '');
+  $('o-planned').hidden = !o;
+  if (o) {
+    const base = c.coin.split('_')[0];
+    $('o-qty').textContent = `${Fmt.num(o.contracts, Fmt.decimalsOf(c.volStep || 1))} contract${o.contracts === 1 ? '' : 's'} = ` +
+      `${Fmt.num(o.coins, Fmt.decimalsOf(c.contractSize))} ${base}`;
+    $('o-planned').textContent = `Planned before rounding: ${Fmt.usdt(res.planned.positionUsdt)} USDT · risk ${Fmt.usdt(res.planned.riskAmount)}`;
+  } else {
+    $('o-qty').textContent = `${Fmt.coins(res.qty)} coins`;
+  }
 
   setBig('o-margin', Fmt.usdt(res.margin), 'USDT', res.notEnoughBalance ? 'neg' : '');
   const mSub = $('o-margin-sub');
@@ -1425,18 +1452,6 @@ function render(res, inp) {
       ? `More than ${avail ? 'available' : 'your balance'}. Minimum leverage: ${res.minLeverage}x`
       : `${avail ? 'Available' : 'Your balance'} is too small for this trade.`;
 
-  $('o-order-tile').hidden = !res.order;                // the order in whole contracts (exchange profile)
-  if (res.order) {
-    const o = res.order, c = inp.contract, base = c.coin.split('_')[0];
-    $('o-order-lbl').textContent = `Order on ${c.exchange} (${c.coin}) — whole contracts, rounded down`;
-    setBig('o-order', Fmt.num(o.contracts, Fmt.decimalsOf(c.volStep || 1)), o.contracts === 1 ? 'contract' : 'contracts',
-           o.belowMin ? 'neg' : '');
-    $('o-order-sub').textContent = `= ${Fmt.num(o.coins, Fmt.decimalsOf(c.contractSize))} ${base} · ${Fmt.usdt(o.usdt)} USDT ` +
-      `(1 contract = ${c.contractSize} ${base})`;
-    $('o-order-risk').textContent = `Actual risk after rounding: ${Fmt.usdt(o.actualRisk)} USDT ` +
-      `(${Fmt.num(o.actualRiskPct, 2)}% of balance) · planned ${Fmt.usdt(res.riskAmount)} USDT`;
-  }
-
   const orTile = $('o-openrisk-tile');                  // only when "Risk already open" is filled in
   orTile.hidden = res.totalOpenRisk == null;
   if (res.totalOpenRisk != null) {
@@ -1446,7 +1461,7 @@ function render(res, inp) {
       `${Fmt.usdt(inp.openRisk)} already open + ${Fmt.usdt(res.loss.total)} this trade`;
   }
 
-  setBig('o-loss', '−' + Fmt.usdt(res.loss.total), 'USDT', 'neg');
+  setBig('o-loss', (res.loss.total > 0.005 ? '−' : '') + Fmt.usdt(res.loss.total), 'USDT', 'neg');
   $('o-loss-sub').textContent = (res.sizeMode === 'available' ? `= ${Fmt.num(res.riskPctUsed, 2)}% of your balance · ` : '') +
     `${Fmt.usdt(res.loss.price)} price move + ${Fmt.usdt(res.loss.fees)} fees · stop is ${Fmt.num(res.stopDistancePct, 2)}% away`;
 
