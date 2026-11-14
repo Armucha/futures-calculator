@@ -114,6 +114,19 @@ remembered. Set one to 0 to turn the tight-stop caution off for that coin. When 
 balance, you get the red warning instead of the amber one. The 5% open-risk limit is in Caution settings too
 (remembered, 0 = off).
 
+The high-total-open-risk caution also shows a **suggested fix** in the same amber box (limit = balance × cap,
+room = limit − risk already open), updated as you type:
+
+- **Room left, Risk %:** "Suggested fix: lower this trade's risk to R% (U USDT). Total would be T USDT (P%)." R is the
+  largest risk that fits, rounded down to 0.01%. U is what R% risks, the same as the room unless the rounding trims a
+  few cents.
+- **Room left, % of available:** "Suggested fix: lower the size slider to S%." S = slider × room ÷ this trade's
+  loss, rounded down to a whole %.
+- Both add: "Or reduce your open risk by D USDT (for example by moving a stop to breakeven)."
+  D = open + this trade − limit.
+- **No room** (your open trades alone are at or above the limit): "Your open trades alone are already above the
+  limit. Suggested fix: skip this trade, or reduce your open risk by D USDT … before adding it."
+
 ## The formulas, in simple words
 
 *Fee* = price × fee rate. You pay it twice: when you open and when you close. Opening = taker (Market) or maker
@@ -163,11 +176,21 @@ Sized from your account instead: with **balance 1000** and **risk 1%** (= 10 USD
 | Position sized from balance 1000, risk 1% | — | **1,341.29 USDT** (loss at stop exactly 10.00) | ✅ |
 | Loss at stop incl. fees = chosen risk | exactly | difference **0.000000000** | ✅ |
 
-The self-test has 205 checks in total: your trade, a LONG trade, every warning,
+The self-test has 222 checks in total: your trade, a LONG trade, every warning,
 number reading (`66783,9`, `66,783.9`, `1,772` = 1772, `0,025` = 0.025, spaces), remembering inputs, reading MEXC messages
 (real samples, plus broken, negative and wrong-coin messages), take profit from a ratio, stop loss from a
 take profit, the amber cautions, being in a trade already (Available, risk already open), and exchange fees
-(Market / Limit entry, TP as limit order), the order in whole contracts, and sizing by % of available. All pass.
+(Market / Limit entry, TP as limit order), the order in whole contracts, sizing by % of available, and the suggested
+fix for too much total open risk. All pass.
+
+Suggested fix (balance 1000, cap 5% → limit 50):
+
+| Case | Suggestion |
+|---|---|
+| Risk % 2% (this 20), open 40 | lower risk to **1.00%** (10.00 USDT), total 50.00 (5.00%); or reduce open risk by 10.00 — at 1% the caution is gone |
+| Risk % 2%, open 60 | open trades alone are above the limit: skip, or reduce open risk by **30.00** |
+| Risk % 2%, open 20 | no caution, no suggestion |
+| % of available 25% (this 63.475), open 0 | lower the slider to **19%** (loss there 48.24, under 50); or reduce open risk by 13.48 |
 
 Exchange fees (balance 1000, risk 1%, LONG 100 / stop 95 / TP 110, maker 0.01%, taker 0.04%):
 

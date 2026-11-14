@@ -122,6 +122,8 @@
   .cautions .c-head { font-size:.75rem; text-transform:uppercase; letter-spacing:.08em; font-weight:700; color:var(--amber-text); padding-top:2px; }
   .cautions p { margin:0; padding:5px 0 5px 24px; position:relative; color:var(--amber-text); font-weight:600; font-size:.95rem; }
   .cautions p::before { content:"⚠"; position:absolute; left:0; }
+  .cautions p.fix { font-weight:500; font-size:.9rem; padding-top:2px; }
+  .cautions p.fix::before { content:"↳"; }
   .settings > summary { cursor:pointer; font-size:.78rem; text-transform:uppercase; letter-spacing:.09em; color:var(--muted); font-weight:600; }
   .settings[open] > summary { margin-bottom:8px; }
   .settings .lbl { margin:10px 0 4px; }
@@ -593,6 +595,25 @@ const FuturesMath = (() => {
              minVol, belowMin: contracts <= 0 || contracts < minVol };
   }
 
+  // Suggested fix when all trades together risk more than the cap.
+  //   limit = balance × cap%, open = risk already open, this = this trade's loss at the stop, room = limit − open.
+  //   CASE 1 (room > 0): shrink this trade — Risk % mode: the largest risk % that fits, rounded DOWN to 0.01%;
+  //                      "% of available" mode: slider × room ÷ this, rounded DOWN to a whole %.
+  //   CASE 2 (open already at/above the limit): skip this trade or reduce open risk.
+  //   Both: reduceOpenBy = open + this − limit.
+  function openRiskFix(inp, byAvailable, open, thisLoss, capPct) {
+    const limit = inp.balance * capPct / 100, room = limit - open, reduceOpenBy = open + thisLoss - limit;
+    if (!(room > 0)) return { kind: 'skip', reduceOpenBy };
+    if (byAvailable) {
+      const sliderPct = Math.floor(inp.availPct * room / thisLoss + 1e-9);
+      return sliderPct >= 1 ? { kind: 'slider', sliderPct, reduceOpenBy } : { kind: 'tooSmall', reduceOpenBy };
+    }
+    const riskPct = Math.floor(room / inp.balance * 10000 + 1e-9) / 100;   // rounded DOWN to 0.01%
+    if (riskPct < 0.01) return { kind: 'tooSmall', reduceOpenBy };
+    const riskUsdt = inp.balance * riskPct / 100, total = open + riskUsdt;
+    return { kind: 'risk', riskPct, riskUsdt, total, totalPct: total / inp.balance * 100, reduceOpenBy };
+  }
+
   // Everything about a trade once the number of coins is known.
   // t = { side, entry, stop, tps:[...], qty, leverage, fees {entry, stop, tp} (or fee: one number),
   //       mmr, balance (or null), available (or null) }
@@ -767,8 +788,10 @@ const FuturesMath = (() => {
     if (opt.openRisk != null) {
       totalOpenRisk = opt.openRisk + r.loss.total;
       totalOpenRiskPct = totalOpenRisk / inp.balance * 100;
-      if (openRiskLimitPct > 0 && totalOpenRiskPct > openRiskLimitPct) {    // limit 0 = this caution is off
-        cautions.push({ code: 'OPEN_RISK_HIGH', total: totalOpenRisk, pct: totalOpenRiskPct, limitPct: openRiskLimitPct });
+      // limit 0 = this caution is off; 1e-9 ignores rounding noise, so exactly at the limit is not "above" it
+      if (openRiskLimitPct > 0 && totalOpenRiskPct > openRiskLimitPct + 1e-9) {
+        cautions.push({ code: 'OPEN_RISK_HIGH', total: totalOpenRisk, pct: totalOpenRiskPct, limitPct: openRiskLimitPct,
+                        fix: openRiskFix(inp, byAvailable, opt.openRisk, r.loss.total, openRiskLimitPct) });
       }
     }
     return Object.assign({ status: 'ok', missing, invalid, riskAmount, planned, warnings: sortW(), cautions,
@@ -1122,6 +1145,36 @@ function runSelfTest() {
   is('0% → asks for more than 0%', pa({ availPct: 0 }).invalid.join(','), 'availPct');
   is('Order box works here too (BTC contracts for 12.5 coins)', pa({ contract: mexc('BTC_USDT') }).order.contracts, 125000);
 
+  section('O. Suggested fix for "all your trades together" (balance 1000, cap 5% → limit 50, no contract rounding)');
+  const fx = changes => M.calculate(Object.assign({ side: 'long', balance: 1000, riskPct: 2, leverage: 10, entry: 100, stop: 95,
+    tps: [110, null, null], makerPct: 0.01, takerPct: 0.04, orderType: 'market', tpLimit: false, mmrPct: 0.5 }, changes));
+  const capC = res => res.cautions.find(c => c.code === 'OPEN_RISK_HIGH');
+  const f1 = capC(fx({ openRisk: 40 }));
+  is('Risk % mode, open 40, risk 2% (this 20) → CASE 1', f1 && f1.fix.kind, 'risk');
+  near('   suggested risk (%)', f1.fix.riskPct, 1, 1e-12);
+  near('   = USDT', f1.fix.riskUsdt, 10, 1e-9);
+  near('   total would be (USDT)', f1.fix.total, 50, 1e-9);
+  near('   total would be (% of balance)', f1.fix.totalPct, 5, 1e-9);
+  near('   or reduce open risk by (USDT)', f1.fix.reduceOpenBy, 10, 1e-9);
+  is('   lines shown', fixLines(f1).join(' / '), "Suggested fix: lower this trade's risk to 1.00% (10.00 USDT). Total would be 50.00 USDT (5.00%). / " +
+     'Or reduce your open risk by 10.00 USDT (for example by moving a stop to breakeven).');
+  is('   round trip: at the suggested 1% the caution is gone', capC(fx({ openRisk: 40, riskPct: f1.fix.riskPct })) ? 'still there' : 'gone', 'gone');
+  const f2 = capC(fx({ openRisk: 60 }));
+  is('Risk % mode, open 60, risk 2% → CASE 2', f2 && f2.fix.kind, 'skip');
+  near('   reduce open risk by (USDT)', f2.fix.reduceOpenBy, 30, 1e-9);
+  is('   line shown', fixLines(f2).join(' / '), 'Your open trades alone are already above the limit. Suggested fix: skip this trade, ' +
+     'or reduce your open risk by 30.00 USDT (for example by moving a stop to breakeven) before adding it.');
+  is('Risk % mode, open 20, risk 2% → no caution, no suggestion', capC(fx({ openRisk: 20 })) ? 'caution' : 'none', 'none');
+  const slider = changes => fx(Object.assign({ sizeMode: 'available', available: 500, availPct: 25, openRisk: 0 }, changes));
+  const s25 = slider({}), f4 = capC(s25);
+  near('Slider 25%, open 0 → this trade\'s loss (USDT)', s25.loss.total, 63.475, 1e-9);
+  is('   → CASE 1, suggested slider', f4 && `${f4.fix.kind} ${f4.fix.sliderPct}%`, 'slider 19%');
+  const s19 = slider({ availPct: 19 });
+  near('   check: loss at stop at 19% (USDT)', s19.loss.total, 48.241, 1e-9);
+  is('   … under the limit, so the caution is gone', capC(s19) ? 'still there' : 'gone', 'gone');
+  is('   lines shown', fixLines(f4).join(' / '), 'Suggested fix: lower the size slider to 19%. / ' +
+     'Or reduce your open risk by 13.48 USDT (for example by moving a stop to breakeven).');   // 13.475 → 13.48
+
   const passed = rows.filter(r => r.pass === true).length;
   const total = rows.filter(r => !r.header).length;
   return { rows, passed, total };
@@ -1355,6 +1408,25 @@ function warningText(w, P) {
   return w.code;
 }
 
+// The "Suggested fix" lines shown under a caution (only the open-risk caution has them).
+function fixLines(c) {
+  const f = c && c.fix;
+  if (!f) return [];
+  const reduce = `reduce your open risk by ${Fmt.usdt(f.reduceOpenBy)} USDT (for example by moving a stop to breakeven)`;
+  switch (f.kind) {
+    case 'risk':
+      return [`Suggested fix: lower this trade's risk to ${Fmt.num(f.riskPct, 2)}% (${Fmt.usdt(f.riskUsdt)} USDT). ` +
+              `Total would be ${Fmt.usdt(f.total)} USDT (${Fmt.num(f.totalPct, 2)}%).`, `Or ${reduce}.`];
+    case 'slider':
+      return [`Suggested fix: lower the size slider to ${f.sliderPct}%.`, `Or ${reduce}.`];
+    case 'skip':
+      return [`Your open trades alone are already above the limit. Suggested fix: skip this trade, or ${reduce} before adding it.`];
+    case 'tooSmall':   // room is less than 0.01% (or 1% of the slider): shrinking this trade won't do
+      return [`Suggested fix: skip this trade, or ${reduce} before adding it.`];
+  }
+  return [];
+}
+
 function placeholderText(res) {
   const parts = [];
   if (res.noAutoStop) parts.push('No stop loss — see the red warning');
@@ -1426,7 +1498,7 @@ function render(res, inp) {
   warnBox.hidden = res.warnings.length === 0;
   const cautions = res.cautions || [];                   // amber: advice
   $('cautions').replaceChildren(h('div', 'c-head', cautions.length > 1 ? 'Cautions — advice, not errors' : 'Caution — advice, not an error'),
-                                ...cautions.map(c => h('p', null, warningText(c, P))));
+                                ...cautions.flatMap(c => [h('p', null, warningText(c, P)), ...fixLines(c).map(t => h('p', 'fix', t))]));
   $('cautions').hidden = cautions.length === 0;
   renderSummary(res);
 

@@ -283,6 +283,16 @@ the 1,772 USDT position) replaced with round numbers: BTC examples balance 1000,
 The ETH caution results don't depend on the balance and stayed the same. 665.48 / 675.48 were never in the repo.
 Self-test 205/205.
 
+## Feature 10 — Suggested fix for too much total open risk (2026-11-14)
+- Under the amber "All your trades together…" caution, in the same box: CASE 1 (room left) → lower risk to R%
+  (rounded down to 0.01%) or the slider to S% (whole %), plus "or reduce open risk by D"; CASE 2 (open already at or
+  above the limit) → skip or reduce open risk by D. `openRiskFix()` in the math, `fixLines()` for the text.
+- My calls: U = the USDT at the suggested R% (equals room when room is a whole 0.01%, as in your tests), so "Total
+  would be" matches what you'd get. Room smaller than 0.01% (or 1% of the slider) → "skip this trade, or reduce…".
+  The caution now ignores rounding noise (1e-9 %), so applying the suggestion really clears it.
+- Log: self-test 222/222 (+17: your 4 cases, texts, round trip, slider check at 19% = 48.24). Browser: updates live
+  while typing open risk / risk / slider; caution disappears at the suggested values.
+
 ## Ideas for later (not built)
 - Split the position across TP1/TP2/TP3 (e.g. 50/30/20%) and show the blended result
 - Round the coin amount to the exchange's step size
