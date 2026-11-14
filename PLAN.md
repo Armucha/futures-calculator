@@ -164,6 +164,25 @@ Log:
   price, typing switches to Manual, ladder → 3R clears TP 2/3, custom "2,5" works, "abc" turns red, survives reload.
   Fixed: calculated TPs like 68283.92 were cut off in the 3 narrow boxes on phones (smaller font ≤ 440 px).
 
+## Feature 5 — Stop loss from a take profit (the reverse of Feature 4)
+- Switch above the ratio buttons: *Calculate:* **TP from stop** | **Stop from TP** (remembered).
+- Stop from TP: entry + TP 1 + ratio (1.5R, 2R, 3R, Custom) → stop, so profit at TP 1 after fees = R × loss at stop
+  after fees. `FuturesMath.stopForR`: P = (TP − entry)·d − fee·(entry + TP), L = P / R,
+  LONG `(entry·(1+fee) − L) / (1−fee)`, SHORT `(entry·(1−fee) + L) / (1+fee)`.
+- No stop → red warning (under the buttons and in the warnings box) instead of a stop:
+  TP on the wrong side · TP doesn't pay the fees · TP too close for this ratio (even a stop at entry loses more than
+  P / R because of the fees — found while checking the formula; without it the "stop" lands on the wrong side) ·
+  a LONG would need a stop ≤ 0.
+- The calculated box (TP 1 or stop) gets the dashed blue style; typing in it → Manual, number kept.
+- Ladder hidden and disabled in Stop from TP; switching there while on Ladder → Manual, numbers kept.
+- Stop rounded towards entry (LONG up, SHORT down), so the ratio is never below the one picked.
+
+Log:
+- 2026-11-14 — Self-test 97/97 (3 round trips + exact R:R, 5 no-stop cases, rounding, no false warning).
+  The first run printed nothing: a duplicated test variable name was a syntax error that stopped the whole page.
+  run-tests.sh reported it (exit 2); fixed. Clicked through in Firefox: follows TP 1 / entry / fee, red warnings
+  for wrong side / no profit / too close, typing a stop → Manual, Ladder hidden, survives reload; fits at 360 px.
+
 ## Ideas for later (not built)
 - Split the position across TP1/TP2/TP3 (e.g. 50/30/20%) and show the blended result
 - Round the coin amount to the exchange's step size

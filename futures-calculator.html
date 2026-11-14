@@ -69,6 +69,14 @@
 
   /* take profit from a ratio */
   .tp-mode > .lbl { margin-bottom:6px; }
+  .seg { display:flex; align-items:center; gap:8px; margin-bottom:10px; }
+  .seg-lbl { flex:none; font-size:.8rem; color:var(--muted); }
+  .seg input { position:absolute; opacity:0; pointer-events:none; }
+  .seg label { flex:1; text-align:center; padding:9px 6px; border:1px solid var(--line2); border-radius:10px; font-size:.84rem; font-weight:600;
+               color:var(--muted); cursor:pointer; user-select:none; -webkit-tap-highlight-color:transparent; }
+  .seg input:checked + label { border-color:var(--accent); color:var(--text); background:rgba(88,166,255,.14); }
+  .seg input:focus-visible + label { outline:3px solid var(--accent); outline-offset:2px; }
+  .hint.warn { color:var(--red); font-weight:600; }
   .chips-tp label { height:auto; min-height:40px; padding:4px 6px; text-align:center; line-height:1.15; font-size:.84rem; }
   .custom-r { margin-top:10px; max-width:200px; }
   .field input.auto { color:var(--accent); border-style:dashed; }
@@ -220,14 +228,19 @@
             <input id="tp3" type="text" inputmode="decimal" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="next" placeholder="optional"></label>
         </div>
         <div class="tp-mode">
-          <div class="lbl">Set take profit from a reward : risk ratio (after fees)</div>
+          <div class="seg" role="radiogroup" aria-label="What to calculate">
+            <span class="seg-lbl">Calculate:</span>
+            <input type="radio" name="calcDir" id="cd-tp" value="tp" checked><label for="cd-tp">TP from stop</label>
+            <input type="radio" name="calcDir" id="cd-stop" value="stop"><label for="cd-stop">Stop from TP</label>
+          </div>
+          <div class="lbl" id="ratioLabel">Set take profit from a reward : risk ratio (after fees)</div>
           <div class="chips chips-tp" role="radiogroup" aria-label="Take profit mode">
             <input type="radio" name="tpMode" id="tpm-manual" value="manual" checked><label for="tpm-manual">Manual</label>
             <input type="radio" name="tpMode" id="tpm-1_5" value="1.5"><label for="tpm-1_5">1.5R</label>
             <input type="radio" name="tpMode" id="tpm-2" value="2"><label for="tpm-2">2R</label>
             <input type="radio" name="tpMode" id="tpm-3" value="3"><label for="tpm-3">3R</label>
             <input type="radio" name="tpMode" id="tpm-custom" value="custom"><label for="tpm-custom">Custom</label>
-            <input type="radio" name="tpMode" id="tpm-ladder" value="ladder"><label for="tpm-ladder">Ladder 1R / 2R / 3R</label>
+            <input type="radio" name="tpMode" id="tpm-ladder" value="ladder"><label for="tpm-ladder" id="tpm-ladder-label">Ladder 1R / 2R / 3R</label>
           </div>
           <label class="field custom-r" id="customRBox" hidden><span>Custom ratio (R)</span>
             <input id="customR" type="text" inputmode="decimal" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="done" placeholder="e.g. 2.5"></label>
@@ -286,6 +299,13 @@
             SHORT: TP = (entry × (1 − fee) − R × loss per coin) ÷ (1 + fee)</span><br>
             <span class="eg">"Loss per coin" is from step 2. The box shows the TP rounded slightly in your favour,
             so the ratio is never below the one you picked.</span></li>
+        <li><b>Stop loss from a take profit</b> ("Stop from TP" + a ratio) is the same idea backwards. First the profit per
+            coin at TP 1 after both fees: <i>P</i> = distance from entry to TP − entry fee − exit fee. You accept a loss of
+            <i>L</i> = P ÷ R per coin. The stop is the price where the loss per coin, fees included, is exactly L.<br>
+            <span class="eg">LONG: stop = (entry × (1 + fee) − L) ÷ (1 − fee) &nbsp;·&nbsp;
+            SHORT: stop = (entry × (1 − fee) + L) ÷ (1 + fee)</span><br>
+            <span class="eg">If TP 1 is on the wrong side, or so close that the fees eat the profit, there is no such stop —
+            you get a red warning instead. The stop is rounded slightly towards the entry, in your favour.</span></li>
         <li><b>Breakeven</b> = the price where the price move exactly pays both fees.<br>
             <span class="eg">LONG: entry × (1 + fee) ÷ (1 − fee) &nbsp;·&nbsp; SHORT: entry × (1 − fee) ÷ (1 + fee)</span></li>
         <li><b>Liquidation (approximate, isolated margin)</b> = the price where your loss has eaten the margin
@@ -384,6 +404,30 @@ const FuturesMath = (() => {
       : (entry * (1 + fee) + R * L) / (1 - fee);
   }
 
+  // The reverse: stop loss for a chosen R, AFTER fees, from entry + take profit.
+  //   P = net profit per coin at TP (after both fees) = (TP − entry) × d − fee × (entry + TP)
+  //   L = P ÷ R  = the loss per coin at the stop we can accept (fees included)
+  //   LONG:  stop = (entry × (1 + fee) − L) ÷ (1 − fee)
+  //   SHORT: stop = (entry × (1 − fee) + L) ÷ (1 + fee)
+  // Returns { stop } — or { error } when there is no such stop:
+  //   TP_WRONG_SIDE   TP is not on the profit side of entry
+  //   TP_NO_PROFIT    TP is on the right side but too close to pay both fees (P ≤ 0)
+  //   TP_TOO_CLOSE    even a stop right at entry loses more than P ÷ R (both fees) → no stop fits
+  //   STOP_BELOW_ZERO a LONG would need a stop at or below 0
+  function stopForR(side, entry, tp, fee, R) {
+    if (!(entry > 0) || !(tp > 0) || !(R > 0) || !(fee >= 0 && fee < 1)) return { error: 'BAD_INPUT' };
+    if (!tpIsOnRightSide(side, entry, tp)) return { error: 'TP_WRONG_SIDE' };
+    const P = (tp - entry) * dir(side) - fee * (entry + tp);
+    if (!(P > 0)) return { error: 'TP_NO_PROFIT' };
+    const L = P / R;
+    const stop = side === 'short'
+      ? (entry * (1 - fee) + L) / (1 + fee)
+      : (entry * (1 + fee) - L) / (1 - fee);
+    if (!stopIsOnRightSide(side, entry, stop)) return { error: 'TP_TOO_CLOSE' };
+    if (!(stop > 0)) return { error: 'STOP_BELOW_ZERO' };
+    return { stop };
+  }
+
   // Everything about a trade once the number of coins is known.
   // t = { side, entry, stop, tps:[...], qty, leverage, fee, mmr, balance (or null) }
   function evaluate(t) {
@@ -476,7 +520,7 @@ const FuturesMath = (() => {
   }
 
   return { RISK_LIMIT_PCT, MIN_RR, parseNumber, lossPerCoin, closeAt, breakevenPrice,
-           liquidationPrice, takeProfitForR, evaluate, calculate };
+           liquidationPrice, takeProfitForR, stopForR, evaluate, calculate };
 })();
 
 /* =====================================================================
@@ -622,6 +666,30 @@ function runSelfTest() {
   is('Stop on the wrong side → no TP', Number.isNaN(tpR('long', 100, 105, 0.001, 2)), true);
   is('SHORT ratio too big (TP at or below 0) is detected', tpR('short', 100, 150, 0, 3) <= 0, true);
 
+  section('I. Stop loss from take profit + ratio (after fees) — the reverse');
+  const sR = (side, e, tp, fee, R) => M.stopForR(side, e, tp, fee, R);
+  const rrStop = (side, e, s, tp, fee) => M.evaluate({ side, entry: e, stop: s, tps: [tp], qty: 1, leverage: 1,
+                                                       fee, mmr: 0.005, balance: null }).takeProfits[0].rrAfterFees;
+  for (const [side, e, tp, fee, want, tol, txt] of [
+    ['short', 66783.9, 65761.5753, 0.0002, 67255, 0.001, 'SHORT entry 66783.9, TP 65761.5753, 2R, fee 0.02%'],
+    ['long', 100, 110.600601, 0.001, 95, 0.000001, 'LONG entry 100, TP 110.600601, 2R, fee 0.1%'],
+    ['short', 1830, 1667.8, 0.0002, 1910.0022, 0.001, 'SHORT entry 1830, TP 1667.8, 2R, fee 0.02%']]) {
+    const s = sR(side, e, tp, fee, 2).stop;
+    near(txt + ' → stop', s, want, tol);
+    near('   R:R after fees with that stop is exactly 2', rrStop(side, e, s, tp, fee), 2, 1e-9);
+  }
+  const wrong = sR('long', 100, 95, 0.001, 2);
+  is('LONG with TP below entry → warning, no stop', `${wrong.error} / stop: ${wrong.stop}`, 'TP_WRONG_SIDE / stop: undefined');
+  is('SHORT with TP above entry → warning, no stop', sR('short', 1830, 1900, 0.0002, 2).error, 'TP_WRONG_SIDE');
+  is('TP too close to pay the fees → warning, no stop', sR('long', 100, 100.1, 0.001, 2).error, 'TP_NO_PROFIT');
+  is('TP profitable but too close for 3R (fees) → warning', sR('long', 100, 100.1, 0.0002, 3).error, 'TP_TOO_CLOSE');
+  is('LONG that would need a stop below 0 → warning', sR('long', 100, 300, 0, 1.5).error, 'STOP_BELOW_ZERO');
+  const box2 = stopText(sR('short', 1830, 1667.8, 0.0002, 2).stop, 'short', 1830, 1667.8);
+  is('Box shows SHORT stop rounded towards entry (in your favour)', box2, '1910');
+  const stopBox15 = M.parseNumber(stopText(sR('short', 66783.9, 65800, 0.0002, 1.5).stop, 'short', 66783.9, 65800));
+  is('1.5R stop as shown in the box → no "below 1.5" warning', codes(M.calculate({ side: 'short', balance: 1321.11,
+     riskPct: 1, entry: 66783.9, stop: stopBox15, tps: [65800, null, null], leverage: 7, feePct: 0.02, mmrPct: 0.5 })), 'none');
+
   const passed = rows.filter(r => r.pass === true).length;
   const total = rows.filter(r => !r.header).length;
   return { rows, passed, total };
@@ -689,6 +757,7 @@ function readRaw() {
   for (const k of FIELDS) raw[k] = $(k).value;
   const sym = document.querySelector('input[name="symbol"]:checked');
   if (sym) raw.symbol = sym.value;   // remembered, but not used by the math
+  raw.calcDir = calcDir();           // remembered: 'tp' (TP from stop) or 'stop' (stop from TP)
   raw.tpMode = tpMode();             // remembered: Manual, 1.5, 2, 3, custom or ladder
   raw.customR = $('customR').value;
   return raw;
@@ -727,12 +796,15 @@ function warningText(w, P) {
       return `TP ${w.n}: reward-to-risk is only ${w.rr.toFixed(2)} after fees — below ${FuturesMath.MIN_RR}.`;
     case 'HIGH_RISK':
       return `You are risking ${Fmt.num(w.riskPct, 2).replace(/\.?0+$/, '')}% of your account — more than ${FuturesMath.RISK_LIMIT_PCT}% per trade.`;
+    case 'NO_AUTO_STOP':
+      return w.text;
   }
   return w.code;
 }
 
 function placeholderText(res) {
   const parts = [];
+  if (res.noAutoStop) parts.push('No stop loss — see the red warning');
   if (res.invalid.length) parts.push('Check: ' + res.invalid.map(k => `${LABELS[k]} (${LIMITS[k]})`).join(', '));
   if (res.missing.length) parts.push('Fill in: ' + res.missing.map(k => LABELS[k]).join(', '));
   return parts.join(' · ') || 'Fix the stop loss to see results.';
@@ -855,11 +927,14 @@ function fillForm(saved) {
   const sym = typeof saved.symbol === 'string' && $('sym-' + saved.symbol);
   if (sym) sym.checked = true;
   if (typeof saved.customR === 'string') $('customR').value = saved.customR;
+  if (saved.calcDir === 'tp' || saved.calcDir === 'stop') $(saved.calcDir === 'stop' ? 'cd-stop' : 'cd-tp').checked = true;
   if (typeof saved.tpMode === 'string') setTpMode(saved.tpMode);
 }
 
-/* Take profit from a ratio (1.5R, 2R, 3R, Custom, Ladder). The calculator writes the TP boxes and keeps
-   them in step with entry, stop, fee and side. Typing in a TP box yourself switches back to Manual. */
+/* Reward : risk ratio (1.5R, 2R, 3R, Custom, Ladder), in two directions:
+     "TP from stop" — the calculator writes TP 1 (TP 1–3 for Ladder) from entry + stop loss;
+     "Stop from TP" — it writes the stop loss from entry + TP 1 (no Ladder there).
+   The calculated box follows entry, fee, side and the other box. Typing in it yourself switches to Manual. */
 const TP_IDS = ['tp1', 'tp2', 'tp3'];
 let lastTpMode = 'manual';
 function tpMode() { const r = document.querySelector('input[name="tpMode"]:checked'); return r ? r.value : 'manual'; }
@@ -869,52 +944,101 @@ function setTpMode(value) {
   radios.forEach(r => { r.checked = r.value === value; });
   lastTpMode = value;
 }
-
-// A calculated TP as text for its box, rounded in your favour (LONG up, SHORT down),
-// so the ratio is never below the one you picked. One decimal more than entry/stop (min 2).
-function tpText(tp, side, entry, stop) {
-  let d = Math.min(10, Math.max(2, Math.max(Fmt.decimalsOf(entry), Fmt.decimalsOf(stop)) + 1));
-  if (tp < 1) d = Math.min(10, Math.max(d, Math.ceil(-Math.log10(tp)) + 3));
-  const f = 10 ** d;
-  const v = side === 'short' ? Math.floor(tp * f) / f : Math.ceil(tp * f) / f;
-  return v.toFixed(d).replace(/\.?0+$/, '');
+function calcDir() { const r = document.querySelector('input[name="calcDir"]:checked'); return r && r.value === 'stop' ? 'stop' : 'tp'; }
+// The boxes the calculator is writing right now.
+function calculatedIds() {
+  if (tpMode() === 'manual') return [];
+  if (calcDir() === 'stop') return ['stop'];
+  return tpMode() === 'ladder' ? TP_IDS : ['tp1'];
 }
 
-// Fill the TP boxes for the chosen ratio. Returns the note shown under the ratio buttons.
-function applyAutoTp() {
+// A calculated price as text for its box, rounded in your favour so the ratio is never below the one
+// you picked: a TP moves away from entry, a stop towards entry — for a LONG both mean rounding up,
+// for a SHORT rounding down. One decimal more than the prices it came from (min 2).
+function priceText(p, side, from) {
+  let d = Math.min(10, Math.max(2, Math.max(...from.map(Fmt.decimalsOf)) + 1));
+  if (p < 1) d = Math.min(10, Math.max(d, Math.ceil(-Math.log10(p)) + 3));
+  const f = 10 ** d;
+  const v = side === 'short' ? Math.floor(p * f) / f : Math.ceil(p * f) / f;
+  return v.toFixed(d).replace(/\.?0+$/, '');
+}
+const tpText = (tp, side, entry, stop) => priceText(tp, side, [entry, stop]);
+const stopText = (stop, side, entry, tp) => priceText(stop, side, [entry, tp]);
+
+// Why no stop loss can be calculated (shown in red).
+function noStopText(error, side, entry) {
+  switch (error) {
+    case 'TP_WRONG_SIDE':
+      return `TP 1 is on the wrong side of the entry: for a ${side.toUpperCase()} it must be ${side === 'short' ? 'below' : 'above'} ` +
+             `${Fmt.num(entry, Fmt.decimalsOf(entry))}. No stop loss calculated.`;
+    case 'TP_NO_PROFIT':
+      return 'TP 1 is too close to the entry to pay the fees — it would not make a profit. No stop loss calculated.';
+    case 'TP_TOO_CLOSE':
+      return 'TP 1 is too close for this ratio: even a stop right at the entry would lose more than the profit ÷ R, ' +
+             'because of the fees. Move TP 1 further away or pick a smaller ratio. No stop loss calculated.';
+    case 'STOP_BELOW_ZERO':
+      return 'This ratio would need a stop loss at or below 0 — pick a bigger ratio or a closer TP 1. No stop loss calculated.';
+  }
+  return 'No stop loss could be calculated.';
+}
+
+// Fill the calculated box(es) for the chosen ratio and direction.
+// Returns { note } for the line under the buttons, plus { warn } when no stop loss can be calculated.
+function applyAuto() {
+  const stopMode = calcDir() === 'stop';
+  $('tpm-ladder').disabled = stopMode;               // Ladder only makes sense for take profits
+  $('tpm-ladder-label').hidden = stopMode;
+  if (stopMode && tpMode() === 'ladder') setTpMode('manual');
   const mode = tpMode();
+  $('ratioLabel').textContent = stopMode
+    ? 'Set the stop loss from TP 1 and a reward : risk ratio (after fees)'
+    : 'Set take profit from a reward : risk ratio (after fees)';
   $('customRBox').hidden = mode !== 'custom';
-  TP_IDS.forEach(id => $(id).classList.remove('auto'));
+  [...TP_IDS, 'stop'].forEach(id => $(id).classList.remove('auto'));
   $('customR').classList.remove('bad');
-  if (mode === 'manual') return 'Pick a ratio to fill TP 1 for you, or type your own take profit.';
+  if (mode === 'manual') {
+    return { note: stopMode ? 'Pick a ratio to calculate the stop loss from TP 1, or type your own stop loss.'
+                            : 'Pick a ratio to fill TP 1 for you, or type your own take profit.' };
+  }
 
   const n = id => FuturesMath.parseNumber($(id).value);
   const side = document.querySelector('input[name="side"]:checked').value;
-  const entry = n('entry'), stop = n('stop'), feePct = n('feePct');
+  const entry = n('entry'), feePct = n('feePct');
+  const feeOk = feePct >= 0 && feePct < 10;
   const ratios = mode === 'ladder' ? [1, 2, 3] : mode === 'custom' ? [n('customR')] : [Number(mode)];
-  const ids = TP_IDS.slice(0, ratios.length);
+  const ids = calculatedIds();
   const clear = () => ids.forEach(id => { $(id).value = ''; });
 
   if (mode === 'custom' && !(ratios[0] > 0)) {
     clear();
-    if (ratios[0] == null) return 'Type a ratio, e.g. 2.5.';
+    if (ratios[0] == null) return { note: 'Type a ratio, e.g. 2.5.' };
     $('customR').classList.add('bad');
-    return 'The ratio must be a number above 0, e.g. 2.5.';
+    return { note: 'The ratio must be a number above 0, e.g. 2.5.' };
   }
-  if (!(entry > 0) || !(stop > 0) || !(feePct >= 0 && feePct < 10)) {
-    clear();
-    return 'Enter entry and stop loss — the take profit is calculated from them.';
+
+  if (stopMode) {
+    const tp = n('tp1');
+    if (!(entry > 0) || !(tp > 0) || !feeOk) { clear(); return { note: 'Enter entry and TP 1 — the stop loss is calculated from them.' }; }
+    const r = FuturesMath.stopForR(side, entry, tp, feePct / 100, ratios[0]);
+    if (r.error) { clear(); const msg = noStopText(r.error, side, entry); return { note: msg, warn: msg }; }
+    $('stop').value = stopText(r.stop, side, entry, tp);
+    $('stop').classList.add('auto');
+    return { note: `Stop loss is set for ${ratios[0]}R: profit at TP 1 after fees = ${ratios[0]} × your loss at the stop after fees. ` +
+                   'Type in the stop loss box to set it yourself.' };
   }
+
+  const stop = n('stop');
+  if (!(entry > 0) || !(stop > 0) || !feeOk) { clear(); return { note: 'Enter entry and stop loss — the take profit is calculated from them.' }; }
   let wrongStop = false, belowZero = false;
   ids.forEach((id, i) => {
     const tp = FuturesMath.takeProfitForR(side, entry, stop, feePct / 100, ratios[i]);
     if (Number.isFinite(tp) && tp > 0) { $(id).value = tpText(tp, side, entry, stop); $(id).classList.add('auto'); }
     else { $(id).value = ''; if (Number.isFinite(tp)) belowZero = true; else wrongStop = true; }
   });
-  if (wrongStop) return 'Fix the stop loss first — then the take profit is calculated.';
-  if (belowZero) return 'That ratio would need a take profit at or below 0 — pick a smaller one.';
+  if (wrongStop) return { note: 'Fix the stop loss first — then the take profit is calculated.' };
+  if (belowZero) return { note: 'That ratio would need a take profit at or below 0 — pick a smaller one.' };
   const what = mode === 'ladder' ? 'TP 1, 2 and 3 are set to 1R, 2R and 3R' : `TP 1 is set to ${ratios[0]}R`;
-  return `${what}: profit after fees = R × your loss at the stop. Type in a TP box to set it yourself.`;
+  return { note: `${what}: profit after fees = R × your loss at the stop. Type in a TP box to set it yourself.` };
 }
 
 function onTpModeChange() {
@@ -926,20 +1050,27 @@ function onTpModeChange() {
 }
 
 function update() {
-  $('tpModeHint').textContent = applyAutoTp();
+  const auto = applyAuto();
+  $('tpModeHint').textContent = auto.note;
+  $('tpModeHint').classList.toggle('warn', Boolean(auto.warn));
   const raw = readRaw();
   const inp = toInputs(raw);
-  render(FuturesMath.calculate(inp), inp);
+  const res = FuturesMath.calculate(inp);
+  if (auto.warn) {                                   // no stop loss could be calculated: say why, in red
+    res.warnings.unshift({ code: 'NO_AUTO_STOP', text: auto.warn });
+    res.missing = res.missing.filter(k => k !== 'stop');
+    res.noAutoStop = true;
+  }
+  render(res, inp);
   saveInputs(raw);
 }
 
-// Every edit in the form: handle the TP mode first, then recalculate everything.
+// Every edit in the form: handle the ratio buttons first, then recalculate everything.
+// (Switching "TP from stop" / "Stop from TP" keeps the numbers in the boxes; applyAuto does the rest.)
 function onFormEdit(e) {
   const t = e.target;
   if (t && t.name === 'tpMode') onTpModeChange();
-  else if (t && (t.id === 'tp1' || (tpMode() === 'ladder' && (t.id === 'tp2' || t.id === 'tp3')))) {
-    if (tpMode() !== 'manual') setTpMode('manual');   // you typed your own take profit: keep it
-  }
+  else if (t && calculatedIds().includes(t.id)) setTpMode('manual');   // you typed in a calculated box: keep your number
   update();
 }
 

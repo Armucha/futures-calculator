@@ -30,6 +30,10 @@ local files. The calculator still works; it just starts empty each time.
    so your profit **after fees** is exactly that many times your loss at the stop. It follows entry, stop,
    fee and LONG/SHORT as you change them. Calculated boxes show in blue with a dashed border. Typing
    your own take profit switches back to **Manual** and keeps your number. The choice is remembered.
+   **The other way round:** switch *Calculate* to **Stop from TP**, type entry and TP 1, and pick 1.5R, 2R,
+   3R or Custom. The calculator then sets the **stop loss**, so the profit at TP 1 after fees is R times the
+   loss at the stop after fees. If TP 1 is on the wrong side of entry, or too close to pay the fees, you get
+   a red warning instead of a stop. Ladder only exists for take profits, so it is hidden in this mode.
 3. **Exchange fees:** taker fee (default 0.02%) and maintenance margin rate (default 0.5%).
    Check your exchange's fee page and fee level. Taker fees on many big exchanges are higher than 0.02%.
 4. Read the results. Anything dangerous shows in **red** at the top.
@@ -77,6 +81,7 @@ Sources: MEXC futures WebSocket docs for the
 | Margin | position ÷ leverage | Leverage does **not** change how much you win or lose. It only changes how much money is locked, and how close liquidation is. |
 | Profit at a TP | coins × TP distance − entry fee − exit fee | Shown as if the whole position closes at that TP. |
 | Reward-to-risk | profit at TP ÷ loss at stop | "Before fees" = TP distance ÷ stop distance (what you see on a chart). |
+| Stop loss from a take profit + ratio R | P = (TP − entry) × d − fee × (entry + TP), L = P ÷ R<br>LONG: (entry × (1 + fee) − L) ÷ (1 − fee)<br>SHORT: (entry × (1 − fee) + L) ÷ (1 + fee) | The reverse of the row below: profit per coin at TP after fees (P), divided by R, is the loss per coin you accept (L). d = +1 LONG, −1 SHORT. Rounded slightly towards entry, in your favour. |
 | Take profit from a ratio R | LONG: (entry × (1 + fee) + R × loss per coin) ÷ (1 − fee)<br>SHORT: (entry × (1 − fee) − R × loss per coin) ÷ (1 + fee) | The price where profit after both fees = R × loss at the stop after fees. Shown rounded slightly in your favour, so the ratio is never below the one you picked. |
 | Breakeven | LONG: entry × (1 + fee) ÷ (1 − fee)<br>SHORT: entry × (1 − fee) ÷ (1 + fee) | The price where the move exactly pays both fees. |
 | Liquidation (approx.) | LONG: entry × (1 − 1/leverage) ÷ (1 − MMR)<br>SHORT: entry × (1 + 1/leverage) ÷ (1 + MMR) | The price where your loss has eaten the margin down to the maintenance margin. Isolated margin, simplified. |
@@ -108,9 +113,10 @@ To make the calculator size exactly this trade, enter **balance 1321.11** and **
 | Position (balance 1321.11, risk 1%) | ≈ 1772 | **1,771.99 USDT** | ✅ |
 | Loss at stop incl. fees = chosen risk | exactly | difference **0.000000000** | ✅ |
 
-The self-test has 84 checks in total: your trade, a LONG trade, every warning,
+The self-test has 97 checks in total: your trade, a LONG trade, every warning,
 number reading (`66783,9`, `66,783.9`, `1,772` = 1772, `0,025` = 0.025, spaces), remembering inputs, reading MEXC messages
-(real samples, plus broken, negative and wrong-coin messages), and take profit from a ratio. All pass.
+(real samples, plus broken, negative and wrong-coin messages), take profit from a ratio, and stop loss from a
+take profit. All pass.
 
 Take profit from a ratio (fee 0.02% unless stated). R:R after fees comes out exactly as chosen in every case:
 
@@ -120,6 +126,15 @@ Take profit from a ratio (fee 0.02% unless stated). R:R after fees comes out exa
 | SHORT 66783.9 / stop 67255 | 2R | 65761.5753 | 65761.57 |
 | SHORT 66783.9 / stop 67255 | 3R | 65263.7671 | 65263.76 |
 | LONG 100 / stop 95, fee 0.1% | 2R | 110.600601 | 110.61 |
+
+Stop loss from a take profit (the same trades backwards). R:R after fees comes out exactly 2 each time:
+
+| Trade | Ratio | Stop loss |
+|---|---|---|
+| SHORT 66783.9 / TP 65761.5753, fee 0.02% | 2R | 67255.00002 (expected 67255) |
+| LONG 100 / TP 110.600601, fee 0.1% | 2R | 94.9999998 (expected 95) |
+| SHORT 1830 / TP 1667.8, fee 0.02% | 2R | 1910.0022 |
+| LONG 100 / TP 95 (wrong side) | 2R | no stop: red warning |
 The expected numbers were computed separately in Python, not by the calculator itself.
 
 Live-price tests, run against the real MEXC feed in Firefox on 2026-11-14, page opened as a local file:
