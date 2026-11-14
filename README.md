@@ -25,6 +25,11 @@ local files. The calculator still works; it just starts empty each time.
 
 1. **Account:** your balance (USDT), how much of it you are willing to lose on this trade (%), and leverage.
 2. **Trade:** LONG or SHORT, entry, stop loss, take profit (TP 2 and TP 3 are optional).
+   Or let the calculator set the take profit for you: tap **1.5R**, **2R**, **3R**, **Custom**
+   (type any ratio, e.g. 2.5) or **Ladder 1R / 2R / 3R** (fills TP 1, 2 and 3). The take profit is placed
+   so your profit **after fees** is exactly that many times your loss at the stop. It follows entry, stop,
+   fee and LONG/SHORT as you change them. Calculated boxes show in blue with a dashed border. Typing
+   your own take profit switches back to **Manual** and keeps your number. The choice is remembered.
 3. **Exchange fees:** taker fee (default 0.02%) and maintenance margin rate (default 0.5%).
    Check your exchange's fee page and fee level. Taker fees on many big exchanges are higher than 0.02%.
 4. Read the results. Anything dangerous shows in **red** at the top.
@@ -72,6 +77,7 @@ Sources: MEXC futures WebSocket docs for the
 | Margin | position ÷ leverage | Leverage does **not** change how much you win or lose. It only changes how much money is locked, and how close liquidation is. |
 | Profit at a TP | coins × TP distance − entry fee − exit fee | Shown as if the whole position closes at that TP. |
 | Reward-to-risk | profit at TP ÷ loss at stop | "Before fees" = TP distance ÷ stop distance (what you see on a chart). |
+| Take profit from a ratio R | LONG: (entry × (1 + fee) + R × loss per coin) ÷ (1 − fee)<br>SHORT: (entry × (1 − fee) − R × loss per coin) ÷ (1 + fee) | The price where profit after both fees = R × loss at the stop after fees. Shown rounded slightly in your favour, so the ratio is never below the one you picked. |
 | Breakeven | LONG: entry × (1 + fee) ÷ (1 − fee)<br>SHORT: entry × (1 − fee) ÷ (1 + fee) | The price where the move exactly pays both fees. |
 | Liquidation (approx.) | LONG: entry × (1 − 1/leverage) ÷ (1 − MMR)<br>SHORT: entry × (1 + 1/leverage) ÷ (1 + MMR) | The price where your loss has eaten the margin down to the maintenance margin. Isolated margin, simplified. |
 | Minimum leverage | position ÷ (balance − opening fee), rounded up | Shown only when the margin doesn't fit in your balance. |
@@ -102,9 +108,18 @@ To make the calculator size exactly this trade, enter **balance 1321.11** and **
 | Position (balance 1321.11, risk 1%) | ≈ 1772 | **1,771.99 USDT** | ✅ |
 | Loss at stop incl. fees = chosen risk | exactly | difference **0.000000000** | ✅ |
 
-The self-test has 70 checks in total: your trade, a LONG trade, every warning,
-number reading (`66783,9`, `66,783.9`, `1,772` = 1772, `0,025` = 0.025, spaces), remembering inputs, and reading MEXC messages
-(real samples, plus broken, negative and wrong-coin messages). All pass.
+The self-test has 84 checks in total: your trade, a LONG trade, every warning,
+number reading (`66783,9`, `66,783.9`, `1,772` = 1772, `0,025` = 0.025, spaces), remembering inputs, reading MEXC messages
+(real samples, plus broken, negative and wrong-coin messages), and take profit from a ratio. All pass.
+
+Take profit from a ratio (fee 0.02% unless stated). R:R after fees comes out exactly as chosen in every case:
+
+| Trade | Ratio | Take profit | In the box (rounded in your favour) |
+|---|---|---|---|
+| SHORT 66783.9 / stop 67255 | 1.5R | 66010.4795 | 66010.47 |
+| SHORT 66783.9 / stop 67255 | 2R | 65761.5753 | 65761.57 |
+| SHORT 66783.9 / stop 67255 | 3R | 65263.7671 | 65263.76 |
+| LONG 100 / stop 95, fee 0.1% | 2R | 110.600601 | 110.61 |
 The expected numbers were computed separately in Python, not by the calculator itself.
 
 Live-price tests, run against the real MEXC feed in Firefox on 2026-11-14, page opened as a local file:

@@ -66,6 +66,12 @@
                  font-weight:600; font-size:.88rem; cursor:pointer; user-select:none; -webkit-tap-highlight-color:transparent; }
   .chips input:checked + label { border-color:var(--accent); color:var(--text); background:rgba(88,166,255,.14); }
   .chips input:focus-visible + label { outline:3px solid var(--accent); outline-offset:2px; }
+
+  /* take profit from a ratio */
+  .tp-mode > .lbl { margin-bottom:6px; }
+  .chips-tp label { height:auto; min-height:40px; padding:4px 6px; text-align:center; line-height:1.15; font-size:.84rem; }
+  .custom-r { margin-top:10px; max-width:200px; }
+  .field input.auto { color:var(--accent); border-style:dashed; }
   .live-row { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:12px; }
   .live-left { min-width:0; }
   .live-price { font-size:clamp(1.5rem, 6.4vw, 2rem); font-weight:700; line-height:1.15; font-variant-numeric:tabular-nums; }
@@ -116,11 +122,14 @@
     .layout { grid-template-columns: minmax(360px, 430px) 1fr; align-items:start; }
     .results { position:sticky; top:12px; }
   }
+  @media (max-width: 440px) {   /* phones: 3 boxes in a row must fit prices like 68283.92 */
+    .cols-3 .field input { padding:0 8px; font-size:1rem; }
+  }
   @media (max-width: 380px) {
     main { padding-left:12px; padding-right:12px; }
     .summary { margin:0 -12px 12px; padding:8px 12px; }
     .card { padding:12px; }
-    .cols-3 .field input, .cols-acct .field input { padding:0 8px; font-size:1rem; }
+    .cols-acct .field input { padding:0 8px; font-size:1rem; }
   }
   @media (max-width: 330px) { .tiles { grid-template-columns:1fr; } }
 
@@ -210,6 +219,20 @@
           <label class="field"><span>TP 3</span>
             <input id="tp3" type="text" inputmode="decimal" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="next" placeholder="optional"></label>
         </div>
+        <div class="tp-mode">
+          <div class="lbl">Set take profit from a reward : risk ratio (after fees)</div>
+          <div class="chips chips-tp" role="radiogroup" aria-label="Take profit mode">
+            <input type="radio" name="tpMode" id="tpm-manual" value="manual" checked><label for="tpm-manual">Manual</label>
+            <input type="radio" name="tpMode" id="tpm-1_5" value="1.5"><label for="tpm-1_5">1.5R</label>
+            <input type="radio" name="tpMode" id="tpm-2" value="2"><label for="tpm-2">2R</label>
+            <input type="radio" name="tpMode" id="tpm-3" value="3"><label for="tpm-3">3R</label>
+            <input type="radio" name="tpMode" id="tpm-custom" value="custom"><label for="tpm-custom">Custom</label>
+            <input type="radio" name="tpMode" id="tpm-ladder" value="ladder"><label for="tpm-ladder">Ladder 1R / 2R / 3R</label>
+          </div>
+          <label class="field custom-r" id="customRBox" hidden><span>Custom ratio (R)</span>
+            <input id="customR" type="text" inputmode="decimal" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="done" placeholder="e.g. 2.5"></label>
+          <p class="hint" id="tpModeHint"></p>
+        </div>
       </section>
 
       <section class="card">
@@ -256,6 +279,13 @@
             Each TP is shown as if the whole position closes there.</li>
         <li><b>Reward-to-risk</b> = profit at TP ÷ loss at stop (after fees).
             "Before fees" = TP distance ÷ stop distance — what you see on a chart.</li>
+        <li><b>Take profit from a ratio</b> (1.5R, 2R, 3R, Custom, Ladder) = the price where your profit
+            <i>after both fees</i> is exactly R times your loss at the stop (also after fees). Because you pay a fee
+            on the way out too, the TP sits a little further away than "R × the stop distance".<br>
+            <span class="eg">LONG: TP = (entry × (1 + fee) + R × loss per coin) ÷ (1 − fee) &nbsp;·&nbsp;
+            SHORT: TP = (entry × (1 − fee) − R × loss per coin) ÷ (1 + fee)</span><br>
+            <span class="eg">"Loss per coin" is from step 2. The box shows the TP rounded slightly in your favour,
+            so the ratio is never below the one you picked.</span></li>
         <li><b>Breakeven</b> = the price where the price move exactly pays both fees.<br>
             <span class="eg">LONG: entry × (1 + fee) ÷ (1 − fee) &nbsp;·&nbsp; SHORT: entry × (1 − fee) ÷ (1 + fee)</span></li>
         <li><b>Liquidation (approximate, isolated margin)</b> = the price where your loss has eaten the margin
@@ -339,6 +369,20 @@ const FuturesMath = (() => {
 
   const stopIsOnRightSide = (side, entry, stop) => (entry - stop) * dir(side) > 0;
   const tpIsOnRightSide = (side, entry, tp) => (tp - entry) * dir(side) > 0;
+
+  // Take profit for a chosen reward-to-risk R, AFTER fees: the price where the profit after both
+  // fees is exactly R × the loss at the stop after both fees. L = lossPerCoin (fees included).
+  //   LONG:  TP = (entry × (1 + fee) + R × L) ÷ (1 − fee)
+  //   SHORT: TP = (entry × (1 − fee) − R × L) ÷ (1 + fee)
+  // Returns NaN if it can't be done (stop on the wrong side, R not above 0). A SHORT with a big R
+  // can come out at or below 0 — the caller treats that as impossible.
+  function takeProfitForR(side, entry, stop, fee, R) {
+    if (!stopIsOnRightSide(side, entry, stop) || !(R > 0) || !(fee >= 0 && fee < 1)) return NaN;
+    const L = lossPerCoin(side, entry, stop, fee);
+    return side === 'short'
+      ? (entry * (1 - fee) - R * L) / (1 + fee)
+      : (entry * (1 + fee) + R * L) / (1 - fee);
+  }
 
   // Everything about a trade once the number of coins is known.
   // t = { side, entry, stop, tps:[...], qty, leverage, fee, mmr, balance (or null) }
@@ -432,7 +476,7 @@ const FuturesMath = (() => {
   }
 
   return { RISK_LIMIT_PCT, MIN_RR, parseNumber, lossPerCoin, closeAt, breakevenPrice,
-           liquidationPrice, evaluate, calculate };
+           liquidationPrice, takeProfitForR, evaluate, calculate };
 })();
 
 /* =====================================================================
@@ -556,6 +600,28 @@ function runSelfTest() {
   is('Reconnect waits 1, 2, 4, 8 s, then every 30 s', [1, 2, 3, 4, 5, 9].map(L.retryDelay).join(','), '1000,2000,4000,8000,30000,30000');
   is('Keep-alive ping every 15 s (docs: 10–20 s)', L.PING_EVERY_MS, 15000);
 
+  section('H. Take profit from a reward : risk ratio (after fees)');
+  const tpR = (side, e, s, fee, R) => M.takeProfitForR(side, e, s, fee, R);
+  const rrAt = (side, e, s, fee, tp) => M.evaluate({ side, entry: e, stop: s, tps: [tp], qty: 1, leverage: 1,
+                                                     fee, mmr: 0.005, balance: null }).takeProfits[0].rrAfterFees;
+  for (const [R, want] of [[1.5, 66010.4795], [2, 65761.5753], [3, 65263.7671]]) {
+    const tp = tpR('short', 66783.9, 67255, 0.0002, R);
+    near(`SHORT entry 66783.9, stop 67255, ${R}R → TP`, tp, want, 0.00005);
+    near(`   R:R after fees at that TP is exactly ${R}`, rrAt('short', 66783.9, 67255, 0.0002, tp), R, 1e-9);
+  }
+  const tl = tpR('long', 100, 95, 0.001, 2);
+  near('LONG entry 100, stop 95, fee 0.1%, 2R → TP', tl, 110.600601, 5e-7);
+  near('   R:R after fees at that TP is exactly 2', rrAt('long', 100, 95, 0.001, tl), 2, 1e-9);
+  is('Ladder 1R / 2R / 3R → R:R after fees', [1, 2, 3].map(R => rrAt('short', 66783.9, 67255, 0.0002,
+     tpR('short', 66783.9, 67255, 0.0002, R)).toFixed(9)).join(' / '), '1.000000000 / 2.000000000 / 3.000000000');
+  const box15 = tpText(tpR('short', 66783.9, 67255, 0.0002, 1.5), 'short', 66783.9, 67255);
+  is('Box shows SHORT 1.5R TP rounded down (in your favour)', box15, '66010.47');
+  is('Box shows LONG 2R TP rounded up (in your favour)', tpText(tl, 'long', 100, 95), '110.61');
+  is('1.5R TP as shown in the box → no "below 1.5" warning', codes(M.calculate({ side: 'short', balance: 1321.11,
+     riskPct: 1, entry: 66783.9, stop: 67255, tps: [M.parseNumber(box15), null, null], leverage: 7, feePct: 0.02, mmrPct: 0.5 })), 'none');
+  is('Stop on the wrong side → no TP', Number.isNaN(tpR('long', 100, 105, 0.001, 2)), true);
+  is('SHORT ratio too big (TP at or below 0) is detected', tpR('short', 100, 150, 0, 3) <= 0, true);
+
   const passed = rows.filter(r => r.pass === true).length;
   const total = rows.filter(r => !r.header).length;
   return { rows, passed, total };
@@ -623,6 +689,8 @@ function readRaw() {
   for (const k of FIELDS) raw[k] = $(k).value;
   const sym = document.querySelector('input[name="symbol"]:checked');
   if (sym) raw.symbol = sym.value;   // remembered, but not used by the math
+  raw.tpMode = tpMode();             // remembered: Manual, 1.5, 2, 3, custom or ladder
+  raw.customR = $('customR').value;
   return raw;
 }
 
@@ -786,18 +854,98 @@ function fillForm(saved) {
   $(saved.side === 'short' ? 'side-short' : 'side-long').checked = true;
   const sym = typeof saved.symbol === 'string' && $('sym-' + saved.symbol);
   if (sym) sym.checked = true;
+  if (typeof saved.customR === 'string') $('customR').value = saved.customR;
+  if (typeof saved.tpMode === 'string') setTpMode(saved.tpMode);
+}
+
+/* Take profit from a ratio (1.5R, 2R, 3R, Custom, Ladder). The calculator writes the TP boxes and keeps
+   them in step with entry, stop, fee and side. Typing in a TP box yourself switches back to Manual. */
+const TP_IDS = ['tp1', 'tp2', 'tp3'];
+let lastTpMode = 'manual';
+function tpMode() { const r = document.querySelector('input[name="tpMode"]:checked'); return r ? r.value : 'manual'; }
+function setTpMode(value) {
+  const radios = [...document.querySelectorAll('input[name="tpMode"]')];
+  if (!radios.some(r => r.value === value)) return;
+  radios.forEach(r => { r.checked = r.value === value; });
+  lastTpMode = value;
+}
+
+// A calculated TP as text for its box, rounded in your favour (LONG up, SHORT down),
+// so the ratio is never below the one you picked. One decimal more than entry/stop (min 2).
+function tpText(tp, side, entry, stop) {
+  let d = Math.min(10, Math.max(2, Math.max(Fmt.decimalsOf(entry), Fmt.decimalsOf(stop)) + 1));
+  if (tp < 1) d = Math.min(10, Math.max(d, Math.ceil(-Math.log10(tp)) + 3));
+  const f = 10 ** d;
+  const v = side === 'short' ? Math.floor(tp * f) / f : Math.ceil(tp * f) / f;
+  return v.toFixed(d).replace(/\.?0+$/, '');
+}
+
+// Fill the TP boxes for the chosen ratio. Returns the note shown under the ratio buttons.
+function applyAutoTp() {
+  const mode = tpMode();
+  $('customRBox').hidden = mode !== 'custom';
+  TP_IDS.forEach(id => $(id).classList.remove('auto'));
+  $('customR').classList.remove('bad');
+  if (mode === 'manual') return 'Pick a ratio to fill TP 1 for you, or type your own take profit.';
+
+  const n = id => FuturesMath.parseNumber($(id).value);
+  const side = document.querySelector('input[name="side"]:checked').value;
+  const entry = n('entry'), stop = n('stop'), feePct = n('feePct');
+  const ratios = mode === 'ladder' ? [1, 2, 3] : mode === 'custom' ? [n('customR')] : [Number(mode)];
+  const ids = TP_IDS.slice(0, ratios.length);
+  const clear = () => ids.forEach(id => { $(id).value = ''; });
+
+  if (mode === 'custom' && !(ratios[0] > 0)) {
+    clear();
+    if (ratios[0] == null) return 'Type a ratio, e.g. 2.5.';
+    $('customR').classList.add('bad');
+    return 'The ratio must be a number above 0, e.g. 2.5.';
+  }
+  if (!(entry > 0) || !(stop > 0) || !(feePct >= 0 && feePct < 10)) {
+    clear();
+    return 'Enter entry and stop loss — the take profit is calculated from them.';
+  }
+  let wrongStop = false, belowZero = false;
+  ids.forEach((id, i) => {
+    const tp = FuturesMath.takeProfitForR(side, entry, stop, feePct / 100, ratios[i]);
+    if (Number.isFinite(tp) && tp > 0) { $(id).value = tpText(tp, side, entry, stop); $(id).classList.add('auto'); }
+    else { $(id).value = ''; if (Number.isFinite(tp)) belowZero = true; else wrongStop = true; }
+  });
+  if (wrongStop) return 'Fix the stop loss first — then the take profit is calculated.';
+  if (belowZero) return 'That ratio would need a take profit at or below 0 — pick a smaller one.';
+  const what = mode === 'ladder' ? 'TP 1, 2 and 3 are set to 1R, 2R and 3R' : `TP 1 is set to ${ratios[0]}R`;
+  return `${what}: profit after fees = R × your loss at the stop. Type in a TP box to set it yourself.`;
+}
+
+function onTpModeChange() {
+  const mode = tpMode();
+  if (mode === lastTpMode) return;
+  if (lastTpMode === 'ladder' && mode !== 'manual') { $('tp2').value = ''; $('tp3').value = ''; } // ladder filled them
+  lastTpMode = mode;
+  if (mode === 'custom' && $('customR').value === '') $('customR').focus();
 }
 
 function update() {
+  $('tpModeHint').textContent = applyAutoTp();
   const raw = readRaw();
   const inp = toInputs(raw);
   render(FuturesMath.calculate(inp), inp);
   saveInputs(raw);
 }
 
+// Every edit in the form: handle the TP mode first, then recalculate everything.
+function onFormEdit(e) {
+  const t = e.target;
+  if (t && t.name === 'tpMode') onTpModeChange();
+  else if (t && (t.id === 'tp1' || (tpMode() === 'ladder' && (t.id === 'tp2' || t.id === 'tp3')))) {
+    if (tpMode() !== 'manual') setTpMode('manual');   // you typed your own take profit: keep it
+  }
+  update();
+}
+
 const form = $('form');
-form.addEventListener('input', update);
-form.addEventListener('change', update);
+form.addEventListener('input', onFormEdit);
+form.addEventListener('change', onFormEdit);
 form.addEventListener('submit', e => e.preventDefault());
 $('summary').addEventListener('click', e => { e.preventDefault(); $('results').scrollIntoView({ behavior: 'smooth', block: 'start' }); });
 $('clearTrade').addEventListener('click', () => {

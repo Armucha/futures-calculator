@@ -147,6 +147,23 @@ Log:
   Deployed files byte-identical to local. Short link forwards to the calculator (keeps `#test`); self-test 65/65 on
   github.io; live MEXC prices connect from the github.io origin.
 
+## Feature 4 — Take profit from a reward : risk ratio
+Buttons under the TP boxes: Manual · 1.5R · 2R · 3R · Custom (box for any ratio) · Ladder 1R / 2R / 3R.
+- TP = price where profit AFTER fees = R × loss at stop AFTER fees (L = lossPerCoin):
+  LONG `(entry·(1+fee) + R·L) / (1−fee)`, SHORT `(entry·(1−fee) − R·L) / (1+fee)` → `FuturesMath.takeProfitForR`.
+- Recalculated on every edit, so it follows entry, stop, fee, side and "Use live price".
+- Typing in TP 1 (or any TP while on Ladder) → Manual, your number kept. Typing TP 2/3 on a single ratio keeps the ratio.
+- Ladder → single ratio clears TP 2/3 (Ladder filled them); Ladder → Manual keeps all three.
+- Box value rounded in your favour (LONG up, SHORT down; one decimal more than entry/stop, min 2), so a 1.5R TP
+  never trips the "below 1.5" warning. No TP when the stop is on the wrong side or a SHORT ratio would need TP ≤ 0.
+- Ratio and custom value remembered with the other inputs.
+
+Log:
+- 2026-11-14 — Comma fix committed first (70/70). Then ratio TP: self-test 84/84 (your 4 TP values + exact R:R,
+  ladder, rounding, no false warning, wrong stop, TP ≤ 0). Clicked through in Firefox: follows entry/fee/side/live
+  price, typing switches to Manual, ladder → 3R clears TP 2/3, custom "2,5" works, "abc" turns red, survives reload.
+  Fixed: calculated TPs like 68283.92 were cut off in the 3 narrow boxes on phones (smaller font ≤ 440 px).
+
 ## Ideas for later (not built)
 - Split the position across TP1/TP2/TP3 (e.g. 50/30/20%) and show the blended result
 - Round the coin amount to the exchange's step size
