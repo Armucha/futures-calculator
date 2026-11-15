@@ -2,8 +2,15 @@
 
 ## Goal
 One self-contained file, `futures-calculator.html` (HTML + CSS + JavaScript, no
-external libraries, no internet needed). Opens in any browser on Linux, Mac and
-Android. Dark theme, big numbers, phone-friendly, live results, remembers inputs.
+external libraries). Works offline; only the optional live prices need internet.
+Opens in any browser on Linux, Mac and Android. Dark theme, big numbers,
+phone-friendly, live results, remembers inputs.
+
+## Status (2026-11-15)
+- **Done:** all steps and Features 2–11 below. Self-test **253/253** passing.
+- **Live:** https://armucha.github.io/futures-calculator/ — byte-identical to the local file (checked 2026-11-15).
+- **Last change:** Feature 11, custom coins (commit 6a3b0da).
+- **Next:** nothing is in progress. Pick from "Ideas for later" at the bottom, one small step at a time.
 
 ## Files
 | File | What it is |
@@ -12,11 +19,15 @@ Android. Dark theme, big numbers, phone-friendly, live results, remembers inputs
 | `PLAN.md` | This plan and progress log. |
 | `README.md` | How to use it, the formulas in simple words, test results. |
 | `run-tests.sh` | Runs the built-in self-test in headless Firefox and prints the results. |
+| `index.html` | Short-link page for GitHub Pages; forwards to the calculator. |
+| `.nojekyll` | Tells GitHub Pages to serve the files as they are. |
+| `CLAUDE.md` | Short guide for Claude: what this is, how to test, working rules. |
 
-## Inputs
+## Inputs (original brief — later features added more, see below)
 Account balance (USDT) · risk per trade (%) · LONG/SHORT · entry · stop loss ·
 take profit 1 (+ optional TP2, TP3) · leverage · taker fee (default 0.02%) ·
 maintenance margin rate (default 0.5%).
+Today the fees and maintenance margin load per coin from the MEXC profile (Features 8 and 9).
 
 ## Outputs
 - Position size in USDT and in coins (sized so loss at stop **including both fees** = chosen risk)
@@ -306,8 +317,11 @@ Self-test 205/205.
 - Log: self-test 253/253 (+31, all earlier tests unchanged). Browser against the real feed: validation messages,
   save → selected with its fees, 99 contracts = 990 XYZ, leverage warning, MEXC "Contract [XYZ_USDT] not exists"
   shown as the no-live-price note, edit, non-MEXC name "ABC", delete with confirm → BTC, reload keeps the coins.
+- 2026-11-15 — Pushed; the github.io file is byte-identical to the local one, self-test 253/253 locally.
 
 ## Ideas for later (not built)
 - Split the position across TP1/TP2/TP3 (e.g. 50/30/20%) and show the blended result
-- Round the coin amount to the exchange's step size
-- Maker fee option for limit-order entries
+- Optional: rewrite git history to remove the old real-looking example balances (offered 2026-11-14, not done)
+
+Done since this list was written: rounding to the exchange's contract step (Feature 8, Stage 2) and the maker fee
+for limit-order entries (Feature 8, Stage 1).
