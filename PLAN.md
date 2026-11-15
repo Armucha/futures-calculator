@@ -7,9 +7,9 @@ Opens in any browser on Linux, Mac and Android. Dark theme, big numbers,
 phone-friendly, live results, remembers inputs.
 
 ## Status (2026-11-15)
-- **Done:** all steps and Features 2–11 below. Self-test **253/253** passing.
+- **Done:** all steps and Features 2–12 below. Self-test **274/274** passing.
 - **Live:** https://armucha.github.io/futures-calculator/ — byte-identical to the local file (checked 2026-11-15).
-- **Last change:** Feature 11, custom coins (commit 6a3b0da).
+- **Last change:** Feature 12, Market mood (Fear & Greed Index).
 - **Next:** nothing is in progress. Pick from "Ideas for later" at the bottom, one small step at a time.
 
 ## Files
@@ -318,6 +318,22 @@ Self-test 205/205.
   save → selected with its fees, 99 contracts = 990 XYZ, leverage warning, MEXC "Contract [XYZ_USDT] not exists"
   shown as the no-live-price note, edit, non-MEXC name "ABC", delete with confirm → BTC, reload keeps the coins.
 - 2026-11-15 — Pushed; the github.io file is byte-identical to the local one, self-test 253/253 locally.
+
+## Feature 12 — Market mood: Crypto Fear & Greed Index (2026-11-15)
+- Step 0 (curl with `Origin: https://armucha.github.io`): `https://api.alternative.me/fng/?limit=7` answers JSON
+  `{"name":…, "data":[{"value":"10","value_classification":"Extreme Fear","timestamp":"1794700800","time_until_update":…}, …],
+  "metadata":{"error":null}}` — values and timestamps are text, newest first, timestamp = midnight UTC in seconds.
+  Header `access-control-allow-origin: *` → the browser may call it from github.io (and from a local file).
+- Card under Live price: value, label (API's own; fallback 0–24 / 25–44 / 45–55 / 56–75 / 76–100 — my call, only used
+  when the API sends none), red→green bar with a marker, change vs yesterday, 7-day row (oldest first), "Updated <date>".
+- Fetched on page load unless the cached answer is under an hour old, re-checked every minute, at most once an hour.
+  Last good answer cached in localStorage (`futures-calculator.fear-greed.v1`, try/catch). Fails → cached (amber
+  "cached" tag) or "Not available". 10 s timeout. Separate `MarketMood` module + its own try/catch at startup;
+  no calculation reads it. Footer credit with link.
+- Log: self-test 274/274 (+21: the 5 labels, API label preferred, +7 / −7, 7-day order, date, broken JSON, missing /
+  empty data, bad values, cache written / used on failure / kept on a broken answer, blocked storage, hourly limit).
+  Firefox screenshots: real API (10 Extreme Fear, −3 vs yesterday, 29 32 29 28 20 13 10), reload within the hour (no
+  fetch), API blocked with old cache → "cached", API blocked with no cache → "Not available" and the calculator works.
 
 ## Ideas for later (not built)
 - Split the position across TP1/TP2/TP3 (e.g. 50/30/20%) and show the blended result

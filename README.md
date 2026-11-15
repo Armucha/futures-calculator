@@ -114,6 +114,21 @@ beyond the three defaults.
 - **Edit** / **Delete** appear under the coin buttons when a custom coin is selected; deleting asks first, in the page.
   Deleting the selected coin switches back to BTC_USDT.
 
+## Market mood (Fear & Greed Index)
+
+A small card under the live price shows the Crypto Fear & Greed Index from
+[alternative.me](https://alternative.me/crypto/fear-and-greed-index/): today's value (0–100) and label (Extreme Fear …
+Extreme Greed), a red-to-green bar, the change vs yesterday, the last 7 days (oldest first) and the "Updated" date.
+
+- **Information only:** it never changes a number, warning or caution.
+- The index changes once a day, so the page fetches it when it opens and at most once an hour, and keeps the last good
+  answer in this browser. If the fetch fails (offline, VPN, site down) you see that last answer marked **cached**, or
+  **Not available** if there is none. The calculator keeps working either way.
+- Only a plain request for the index goes to alternative.me — nothing about you or your trade. Their API allows calls
+  from any web page (`access-control-allow-origin: *`, checked 2026-11-15).
+- Labels come from alternative.me. Only if one is missing does the page pick one itself:
+  0–24 Extreme Fear, 25–44 Fear, 45–55 Neutral, 56–75 Greed, 76–100 Extreme Greed.
+
 ## Red warnings and amber cautions
 
 **Red** = a real problem: stop on the wrong side, liquidation before the stop, margin bigger than your balance
@@ -195,12 +210,12 @@ Sized from your account instead: with **balance 1000** and **risk 1%** (= 10 USD
 | Position sized from balance 1000, risk 1% | — | **1,341.29 USDT** (loss at stop exactly 10.00) | ✅ |
 | Loss at stop incl. fees = chosen risk | exactly | difference **0.000000000** | ✅ |
 
-The self-test has 253 checks in total: your trade, a LONG trade, every warning,
+The self-test has 274 checks in total: your trade, a LONG trade, every warning,
 number reading (`66783,9`, `66,783.9`, `1,772` = 1772, `0,025` = 0.025, spaces), remembering inputs, reading MEXC messages
 (real samples, plus broken, negative and wrong-coin messages), take profit from a ratio, stop loss from a
 take profit, the amber cautions, being in a trade already (Available, risk already open), and exchange fees
 (Market / Limit entry, TP as limit order), the order in whole contracts, sizing by % of available, and the suggested
-fix for too much total open risk, and custom coins. All pass.
+fix for too much total open risk, custom coins, and the market mood card (sample answers, no internet). All pass.
 
 Custom coins (generic coin, balance 1000, risk 1%, LONG 0.2 / stop 0.19, 10x, Market, maker 0, taker 0.02%, MMR 0.1%):
 
